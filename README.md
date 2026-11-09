@@ -2,6 +2,13 @@
 
 A Claude Code plugin that shows, in a browser page, what Claude Code is about to do and what it is about to send to Claude, and waits until you send or block it.
 
+## Motivation
+
+Claude Code gives Claude access to your computer: it runs commands, reads files and fetches web pages for you. Without a computer science degree, it is often hard to tell what a command does or which of your data ends up with Claude. LLM Checker tries to close that gap in two ways:
+
+1. It translates every Bash command into plain English before it runs, following instructions you write yourself.
+2. It shows what is about to be sent to Claude (file contents, command output, web pages), as far as Claude Code lets a plugin see it, and lets you block it.
+
 - Bash commands wait as a card. Claude Code first explains each command in plain words, following instructions you can edit on the page.
 - Tool results (file contents, command output, web pages, MCP answers) wait before they go to Claude. PDFs, images, spreadsheets, HTML, Markdown and code are shown as such.
 - Swipe right or press the right arrow to send. Swipe left or press the left arrow to block. For a website, swipe up or press the up arrow to send it and trust the site in this project.
@@ -39,8 +46,9 @@ In the Claude Code terminal app you can type the same as `/plugin marketplace ad
 
 ## Limits
 
-- The page sees only what passes through hooks. The system prompt, CLAUDE.md files, pasted images, `@file` mentions, editor selections, failed tool calls and context compaction reach Claude without stopping on the page.
+- The page sees only what passes through hooks. The system prompt, CLAUDE.md files, pasted images, `@file` mentions, editor selections and context compaction reach Claude without stopping on the page.
 - Blocking a tool result replaces its text before it goes to Claude, but the tool has already run.
+- Claude Code cannot replace the text of a tool error. Blocking an error stops Claude before it reads it, but the error stays in the conversation: rewind to before that step, or it goes to Claude with your next message.
 
 Your explanation instructions and the server log are stored in `~/.llm-checker/`.
 
