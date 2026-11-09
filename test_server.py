@@ -42,14 +42,16 @@ reason = lambda out: out["hookSpecificOutput"]["permissionDecisionReason"]
 
 # Pre-step: the first call goes straight back to Claude Code with the request to explain it.
 assert reason(post("/hook", ls)) == server.summary_request()
-# The retry waits on the page with the explanation; approving lets the normal permission flow run.
-item, out = hook_then_decide(ls_explained, True)
-assert item["summary"] == "Lists the files in this folder." and out == {}
+# The retry waits on the page with the explanation, even when Claude changed the command;
+# approving lets the normal permission flow run.
+changed = {**ls, "tool_input": {"command": "ls -la", "description": "Lists the files in this folder."}}
+item, out = hook_then_decide(changed, True)
+assert item["summary"] == "Lists the files in this folder." and item["content"]["command"] == "ls -la" and out == {}
 assert opened, "a waiting card opens the page when none is open"
 
 # The same call twice (hooks in a settings file and in the plugin): a single card, the same answer for both.
 twice = {**ls_explained, "tool_use_id": "toolu_1"}
-server.explained.add(("s", "ls"))
+server.explained.add("s")
 outs = []
 threads = [threading.Thread(target=lambda: outs.append(post("/hook", twice))) for _ in range(2)]
 for t in threads:

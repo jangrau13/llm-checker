@@ -47,9 +47,8 @@ def style():
 
 def summary_request():
     """Sent to Claude Code as the reason for holding back a Bash call it has not explained yet."""
-    return ("Not run yet: the user wants an explanation first. Call Bash again with exactly the same "
-            "command and write the explanation in `description`, following these instructions from "
-            "the user:\n\n" + style())
+    return ("Not run yet: the user wants an explanation first. Call Bash again for this step and write "
+            "the explanation in `description`, following these instructions from the user:\n\n" + style())
 
 # Steps that skip the page: prompts the user typed, and file operations VS Code already shows.
 # The content of a Read result still waits on the page, because that is what leaves the machine.
@@ -77,7 +76,7 @@ lock = threading.Lock()
 ids = itertools.count(1)
 pending = {}  # id -> {"item": dict, "event": Event, "approve": bool}
 history = []  # decided items, newest first
-explained = set()  # (session, command) of Bash calls Claude Code was asked to explain
+explained = set()  # sessions whose next Bash call carries the explanation Claude Code was asked for
 last_root = [access.project_root()]  # project of the latest hook call; the sidebar shows its access
 
 
@@ -152,10 +151,13 @@ def handle_hook(hook):
                                "content": hook.get("tool_input"), "approved": True})
         return {}
     bash = event == "PreToolUse" and tool == "Bash"
-    key = (hook.get("session_id"), (hook.get("tool_input") or {}).get("command"))
+    # Keyed by session, not by command: Claude often adjusts the command when it retries.
+    # The card shows the command that will really run, so the change cannot slip past.
+    key = hook.get("session_id")
     with lock:
         ask_summary = bash and key not in explained
-        explained.discard(key)  # the retry is gated once; a later identical call asks again
+        if bash:
+            explained.discard(key)  # the retry is gated once; the session's next Bash call asks again
     title, content = view(hook, ask_summary)
     item = {"id": next(ids), "event": event, "title": title, "content": content,
             "session": hook.get("session_id"), "tool": tool, "input": hook.get("tool_input")}
