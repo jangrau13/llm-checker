@@ -11,6 +11,8 @@ and opens the page. The tool hooks are HTTP hooks, so they need no shell or curl
 import itertools
 import json
 import threading
+import time
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -51,8 +53,24 @@ def summary_request():
 
 # Steps that skip the page: prompts the user typed, and file operations VS Code already shows.
 # The content of a Read result still waits on the page, because that is what leaves the machine.
-PASS_THROUGH = {("UserPromptSubmit", None)} | {("PreToolUse", t) for t in ("Read", "Edit", "Write")} | {
-    ("PostToolUse", t) for t in ("Edit", "Write")}
+# ToolSearch only loads Claude Code's own tool descriptions, no user data.
+PASS_THROUGH = {("UserPromptSubmit", None)} | {("PreToolUse", t) for t in ("Read", "Edit", "Write", "ToolSearch")} | {
+    ("PostToolUse", t) for t in ("Edit", "Write", "ToolSearch")}
+
+last_poll = [0.0]  # when a page last asked for /state
+last_open = [0.0]
+
+
+def open_page():
+    webbrowser.open(f"http://127.0.0.1:{PORT}")
+
+
+def ensure_page_open():
+    """Open the page when a card waits and no page has polled for a few seconds."""
+    now = time.time()
+    if now - last_poll[0] > 5 and now - last_open[0] > 30:
+        last_open[0] = now
+        open_page()
 
 lock = threading.Lock()
 ids = itertools.count(1)
@@ -139,6 +157,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/state":
+            last_poll[0] = time.time()
             with lock:
                 self.send(200, {"pending": [p["item"] for p in pending.values()], "history": history[:50]})
         elif self.path == "/access":
@@ -192,6 +211,7 @@ class Handler(BaseHTTPRequestHandler):
             entry = {"item": item, "event": threading.Event(), "approve": False, "root": root}
             with lock:
                 pending[item["id"]] = entry
+            ensure_page_open()
             entry["event"].wait()  # blocks the hook, and with it Claude, until a decision
             self.send(200, answer(hook, entry["approve"], False))
         elif self.path == "/decide":

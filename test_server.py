@@ -9,6 +9,8 @@ from pathlib import Path
 
 import server
 
+opened = []
+server.open_page = lambda: opened.append(True)  # no real browser tabs during the test
 TMP = Path(__file__).resolve().parent / "tmp"  # git-ignored scratch folder
 TMP.mkdir(exist_ok=True)
 
@@ -43,6 +45,8 @@ assert reason(post("/hook", ls)) == server.summary_request()
 # The retry waits on the page with the explanation; approving lets the normal permission flow run.
 item, out = hook_then_decide(ls_explained, True)
 assert item["summary"] == "Lists the files in this folder." and out == {}
+assert opened, "a waiting card opens the page when none is open"
+assert post("/hook", {"hook_event_name": "PreToolUse", "tool_name": "ToolSearch", "tool_input": {}}) == {}
 # The next identical call asks for an explanation again, in the style saved on the page.
 server.STYLE_FILE = TMP / "explain-style-test.txt"
 post("/style", {"style": "One sentence, in German."})
