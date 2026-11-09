@@ -41,7 +41,6 @@ In the Claude Code terminal app you can type the same as `/plugin marketplace ad
 
 - The page sees only what passes through hooks. The system prompt, CLAUDE.md files, pasted images, `@file` mentions, editor selections, failed tool calls and context compaction reach Claude without stopping on the page.
 - Blocking a tool result replaces its text before it goes to Claude, but the tool has already run.
-- The Bash sandbox exists on macOS, Linux and WSL2 only. On native Windows, Bash commands are not sandboxed.
 
 Your explanation instructions and the server log are stored in `~/.llm-checker/`.
 
