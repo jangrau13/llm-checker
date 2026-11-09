@@ -57,6 +57,7 @@ def summary_request():
 PASS_THROUGH = {("UserPromptSubmit", None)} | {("PreToolUse", t) for t in ("Read", "Edit", "Write", "ToolSearch")} | {
     ("PostToolUse", t) for t in ("Edit", "Write", "ToolSearch")}
 
+inflight = {}  # (event, tool_use_id) -> answer slot; ponytail: never pruned, a few KB per session
 last_poll = [0.0]  # when a page last asked for /state
 last_open = [0.0]
 
@@ -135,6 +136,48 @@ def answer(hook, approve, ask_summary):
     return {"decision": "block", "reason": "Rejected in the approval page."}
 
 
+def handle_hook(hook):
+    """The hook answer for a single call; waits on the page when the call needs a decision."""
+    event, tool = hook.get("hook_event_name"), hook.get("tool_name") or ""
+    # MCP calls: only what comes back and goes to Claude waits, not the call itself.
+    if (event, tool or None) in PASS_THROUGH or (event == "PreToolUse" and tool.startswith("mcp__")):
+        return {}
+    root = access.project_root(hook.get("cwd"))
+    last_root[0] = root
+    url = (hook.get("tool_input") or {}).get("url")
+    if tool == "WebFetch" and access.trusted(root, url):
+        with lock:  # a site trusted for this project: logged, no click needed
+            history.insert(0, {"id": next(ids), "event": event, "tool": "WebFetch",
+                               "title": f"{access.host(url)} is trusted in this project (automatic)",
+                               "content": hook.get("tool_input"), "approved": True})
+        return {}
+    bash = event == "PreToolUse" and tool == "Bash"
+    key = (hook.get("session_id"), (hook.get("tool_input") or {}).get("command"))
+    with lock:
+        ask_summary = bash and key not in explained
+        explained.discard(key)  # the retry is gated once; a later identical call asks again
+    title, content = view(hook, ask_summary)
+    item = {"id": next(ids), "event": event, "title": title, "content": content,
+            "session": hook.get("session_id"), "tool": tool, "input": hook.get("tool_input")}
+    if ask_summary:  # automatic: logged in the history, no click needed
+        with lock:
+            explained.add(key)
+            history.insert(0, {**item, "approved": True})
+        return answer(hook, True, True)
+    if bash:
+        item["summary"] = hook["tool_input"].get("description")
+    if event == "PostToolUseFailure":
+        item["note"] = FAILURE_NOTE
+    if tool == "WebFetch" and access.host(url):
+        item["site"] = access.host(url)
+    entry = {"item": item, "event": threading.Event(), "approve": False, "root": root}
+    with lock:
+        pending[item["id"]] = entry
+    ensure_page_open()
+    entry["event"].wait()  # blocks the hook, and with it Claude, until a decision
+    return answer(hook, entry["approve"], False)
+
+
 class Handler(BaseHTTPRequestHandler):
     def send(self, status, body, ctype="application/json"):
         data = body.encode() if isinstance(body, str) else json.dumps(body).encode()
@@ -172,48 +215,23 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/hook":
             hook = self.read_json()
-            event, tool = hook.get("hook_event_name"), hook.get("tool_name") or ""
-            # MCP calls: only what comes back and goes to Claude waits, not the call itself.
-            if (event, tool or None) in PASS_THROUGH or (event == "PreToolUse" and tool.startswith("mcp__")):
-                self.send(200, {})
+            # The same call can arrive twice, when the hooks are both in a settings file and in the
+            # plugin. All copies of a call wait for, and get, the answer to the first copy.
+            k = (hook.get("hook_event_name"), hook.get("tool_use_id"))
+            if not k[1]:
+                self.send(200, handle_hook(hook))
                 return
-            root = access.project_root(hook.get("cwd"))
-            last_root[0] = root
-            url = (hook.get("tool_input") or {}).get("url")
-            if hook.get("tool_name") == "WebFetch" and access.trusted(root, url):
-                with lock:  # a site trusted for this project: logged, no click needed
-                    history.insert(0, {"id": next(ids), "event": hook.get("hook_event_name"), "tool": "WebFetch",
-                                       "title": f"{access.host(url)} is trusted in this project (automatic)",
-                                       "content": hook.get("tool_input"), "approved": True})
-                self.send(200, {})
-                return
-            bash = hook.get("hook_event_name") == "PreToolUse" and hook.get("tool_name") == "Bash"
-            key = (hook.get("session_id"), (hook.get("tool_input") or {}).get("command"))
             with lock:
-                ask_summary = bash and key not in explained
-                explained.discard(key)  # the retry is gated once; a later identical call asks again
-            title, content = view(hook, ask_summary)
-            item = {"id": next(ids), "event": hook.get("hook_event_name"), "title": title,
-                    "content": content, "session": hook.get("session_id"),
-                    "tool": hook.get("tool_name"), "input": hook.get("tool_input")}
-            if ask_summary:  # automatic: logged in the history, no click needed
-                with lock:
-                    explained.add(key)
-                    history.insert(0, {**item, "approved": True})
-                self.send(200, answer(hook, True, True))
-                return
-            if bash:
-                item["summary"] = hook["tool_input"].get("description")
-            if hook.get("hook_event_name") == "PostToolUseFailure":
-                item["note"] = FAILURE_NOTE
-            if hook.get("tool_name") == "WebFetch" and access.host(url):
-                item["site"] = access.host(url)
-            entry = {"item": item, "event": threading.Event(), "approve": False, "root": root}
-            with lock:
-                pending[item["id"]] = entry
-            ensure_page_open()
-            entry["event"].wait()  # blocks the hook, and with it Claude, until a decision
-            self.send(200, answer(hook, entry["approve"], False))
+                slot = inflight.get(k)
+                first = slot is None
+                if first:
+                    slot = inflight[k] = {"done": threading.Event(), "answer": {}}
+            if first:
+                slot["answer"] = handle_hook(hook)
+                slot["done"].set()
+            else:
+                slot["done"].wait()
+            self.send(200, slot["answer"])
         elif self.path == "/decide":
             body = self.read_json()
             with lock:

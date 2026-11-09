@@ -46,6 +46,21 @@ assert reason(post("/hook", ls)) == server.summary_request()
 item, out = hook_then_decide(ls_explained, True)
 assert item["summary"] == "Lists the files in this folder." and out == {}
 assert opened, "a waiting card opens the page when none is open"
+
+# The same call twice (hooks in a settings file and in the plugin): a single card, the same answer for both.
+twice = {**ls_explained, "tool_use_id": "toolu_1"}
+server.explained.add(("s", "ls"))
+outs = []
+threads = [threading.Thread(target=lambda: outs.append(post("/hook", twice))) for _ in range(2)]
+for t in threads:
+    t.start()
+time.sleep(0.3)
+waiting = json.loads(urllib.request.urlopen(base + "/state").read())["pending"]
+assert len(waiting) == 1, waiting
+post("/decide", {"id": waiting[0]["id"], "approve": True})
+for t in threads:
+    t.join(2)
+assert outs == [{}, {}], outs
 assert post("/hook", {"hook_event_name": "PreToolUse", "tool_name": "ToolSearch", "tool_input": {}}) == {}
 # The next identical call asks for an explanation again, in the style saved on the page.
 server.STYLE_FILE = TMP / "explain-style-test.txt"
