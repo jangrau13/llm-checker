@@ -1,0 +1,8 @@
+{
+  "name": "llm-checker",
+  "owner": { "name": "Jan Grau" },
+  "description": "LLM Checker: see and approve what Claude Code sends to Claude",
+  "plugins": [
+    { "name": "llm-checker", "source": "./" }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 30,
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/start.py\" || python \"${CLAUDE_PLUGIN_ROOT}/start.py\" || py \"${CLAUDE_PLUGIN_ROOT}/start.py\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "http", "url": "http://127.0.0.1:1308/hook", "timeout": 3600, "onFailure": "block" }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "http", "url": "http://127.0.0.1:1308/hook", "timeout": 3600, "onFailure": "block" }] }
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "llm-checker",
+  "displayName": "LLM Checker",
+  "version": "0.1.0",
+  "description": "See and approve, in a browser page, every tool call Claude Code makes and every tool result it sends to Claude.",
+  "author": { "name": "Jan Grau" },
+  "homepage": "https://github.com/jangrau13/llm-checker",
+  "repository": "https://github.com/jangrau13/llm-checker",
+  "license": "MIT",
+  "keywords": ["hooks", "approval", "privacy", "security", "teaching"]
+}

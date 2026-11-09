@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Checker</title>
+<link rel="stylesheet" crossorigin="anonymous"
+      href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/styles/github.min.css"
+      integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L">
+<script crossorigin="anonymous"
+        src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.12.0/build/highlight.min.js"
+        integrity="sha384-wjfDDhOPPdjtva8vWBhWeVprSpmxisEu5aYT3q1JyACqXpdKpo3PWZTMVq24MBix"></script>
+<script crossorigin="anonymous"
+        src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"
+        integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+"></script>
+<style>
+  * { box-sizing: border-box; }
+  /* Readable in greyscale: every state also has a symbol, a word or a line style, never colour alone.
+     The three state colours differ in lightness too (dark, light, mid). */
+  :root { --brand: #1f3a5f; --accent: #1f3a5f; --bg: #fff; --ink: #222; --line: #d6d6d6;
+          --ok: #1d5c34; --warn: #f0c36a; --bad: #b3261e; --side: 330px; }
+  body { font: 15px "Open Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif; margin: 0;
+         background: var(--bg); color: var(--ink); }
+  main { margin: 0 var(--side); }
+  #style { position: fixed; inset: 0 0 0 auto; width: var(--side); overflow: auto; background: #fff;
+           border-left: 1px solid #e1e4e8; padding: 0.8em 0.9em 2em; font-size: 0.88em;
+           display: flex; flex-direction: column; }
+  #style h2 { font-size: 1.1em; margin: 0.2em 0 0.4em; color: var(--brand); }
+  #style .note { color: #777; }
+  #styleText { flex: 1; min-height: 16em; width: 100%; font: inherit; line-height: 1.5; padding: 0.6em;
+               border: 1px solid #d0d4d8; border-radius: 8px; resize: none; }
+  #styleText:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .row-buttons { display: flex; gap: 0.5em; align-items: center; margin-top: 0.6em; }
+  .row-buttons button { border: none; border-radius: 6px; padding: 0.45em 1em; cursor: pointer; font: inherit; }
+  #saveStyle { background: var(--brand); color: #fff; } #resetStyle { background: #eceef1; }
+  header { text-align: center; padding: 1em 0 0.4em; }
+  header h1 { margin: 0; font-size: 1.4em; color: var(--brand); }
+  header .brand { font-weight: 800; letter-spacing: 0.02em; }
+  header p { margin: 0.2em 0 0; color: #666; }
+  h2.section { width: min(900px, 94%); margin: 1.5em auto 0; font-size: 1.1em; color: var(--brand); }
+  #access { position: fixed; inset: 0 auto 0 0; width: var(--side); overflow: auto; background: #fff;
+            border-right: 1px solid #e1e4e8; padding: 0.8em 0.9em 2em; font-size: 0.88em; }
+  #access h2 { font-size: 1.1em; margin: 0.2em 0 0.4em; color: var(--brand); }
+  #access h3 { font-size: 0.95em; margin: 1.2em 0 0.3em; color: var(--brand); }
+  #access .legend { line-height: 2; color: #555; margin: 0 0 0.6em; }
+  #access .note { color: #777; font-size: 0.9em; }
+  #access details { margin: 0 0 0 0.9em; } #access > #tree > details { margin-left: 0; }
+  #access summary, #access .file { display: flex; align-items: center; gap: 0.3em; padding: 0.1em 0.3em;
+                                   border-radius: 5px; font-weight: 400; color: var(--ink); }
+  #access .file { margin-left: 1.9em; }
+  #access .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Rows: allow plain, ask with a dotted edge, deny hatched, so the states differ without colour. */
+  .tint-allow { background: #eef6f0; }
+  .tint-ask { background: #fff8e8; box-shadow: inset 3px 0 0 #8a6d1d; }
+  .tint-deny { background: repeating-linear-gradient(135deg, #f6e3e1 0 6px, #fff 6px 10px); }
+  .pill { font-size: 0.75em; padding: 0 0.45em; border-radius: 2px; font-weight: 600; border: 1.5px solid; white-space: nowrap; }
+  .pill.allow { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .pill.ask { background: #fff; border: 1.5px dashed #6b5414; color: #4d3c0e; }
+  .pill.deny { background: #fff; border-color: var(--bad); color: var(--bad); text-decoration: line-through; }
+  #access ul { margin: 0; padding-left: 1.1em; } #access li { margin: 0.15em 0; word-break: break-all; }
+  .warn-box { background: #fbe4e6; border-left: 4px solid var(--bad); padding: 0.4em 0.6em; border-radius: 4px; }
+  #star { color: var(--accent); font-size: 1.5em !important; width: 52px !important; height: 52px !important; align-self: center; }
+  @media (max-width: 1200px) { main { margin: 0; } #access, #style { position: static; width: auto; border: none; } }
+  #deck { position: relative; width: min(900px, 94%); height: calc(100vh - 230px); min-height: 360px; margin: 0.6em auto 0; }
+  .card, .shadow { position: absolute; inset: 0; border-radius: 18px; background: #fff;
+                   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12); }
+  .shadow { transform: translateY(var(--y)) scale(var(--s)); opacity: 0.6; }
+  .card { display: flex; flex-direction: column; overflow: hidden; touch-action: pan-y; user-select: none;
+          cursor: grab; transition: transform 0.25s ease; }
+  .card.dragging { transition: none; cursor: grabbing; }
+  .card .top { padding: 1em 1.2em 0.6em; border-bottom: 1px solid #eee; }
+  .card .body { flex: 1; overflow: auto; padding: 0.6em 1.2em 1.2em; user-select: text; cursor: auto; }
+  .badge { display: inline-block; padding: 0.15em 0.6em; border-radius: 99px; font-size: 0.8em; font-weight: 600;
+           color: #fff; margin-right: 0.5em; vertical-align: middle; }
+  .UserPromptSubmit { background: #6a4bc4; } .PreToolUse { background: #c27a00; } .PostToolUse { background: #1f7a8c; }
+  .title { font-size: 1.15em; font-weight: 600; vertical-align: middle; }
+  .explain { background: #fff6dd; border-left: 4px solid #e0a800; padding: 0.5em 0.8em; margin: 0.6em 0 0; }
+  .stamp { position: absolute; top: 1.2em; padding: 0.1em 0.5em; border: 4px solid; border-radius: 8px;
+           font-size: 2em; font-weight: 800; opacity: 0; pointer-events: none; transform: rotate(-12deg); }
+  .stamp.send { left: 1em; color: #1a9c4a; } .stamp.block { right: 1em; color: #d23; transform: rotate(12deg); }
+  .stamp.trust { top: auto; bottom: 1.2em; left: 50%; transform: translateX(-50%); color: var(--accent); }
+  .empty { position: absolute; inset: 0; display: grid; place-items: center; color: #888; font-size: 1.2em; }
+  #controls { display: flex; justify-content: center; gap: 2.5em; margin: 1em 0; }
+  #controls button { width: 64px; height: 64px; border-radius: 50%; border: none; font-size: 1.8em; cursor: pointer;
+                     background: #fff; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); }
+  #controls button:disabled { opacity: 0.35; cursor: default; }
+  #no { color: #d23; } #yes { color: #1a9c4a; }
+  .hint { text-align: center; color: #888; font-size: 0.85em; margin-top: -0.4em; }
+  details { margin: 0.3em 0 0.3em 0.6em; } summary { cursor: pointer; color: #555; font-weight: 600; }
+  .row { margin: 0.25em 0 0.25em 0.6em; } .key { color: #555; font-weight: 600; margin-right: 0.4em; }
+  .val { font-family: ui-monospace, monospace; font-size: 0.9em; background: #f4f4f6; padding: 0.05em 0.35em; border-radius: 4px; }
+  pre.plain { white-space: pre-wrap; word-break: break-word; background: #f6f8fa; border-radius: 8px;
+              padding: 0.6em; margin: 0.25em 0; max-height: 32em; overflow: auto; font-size: 0.85em; }
+  .viewer { border: 1px solid #e1e4e8; border-radius: 8px; margin: 0.25em 0; overflow: hidden; }
+  .tabs { display: flex; gap: 0.3em; align-items: center; background: #f0f2f4; padding: 0.3em 0.5em; border-bottom: 1px solid #e1e4e8; }
+  .tabs .fname { font-family: ui-monospace, monospace; font-size: 0.85em; color: #444; margin-right: auto; }
+  .tabs button { border: 1px solid transparent; background: none; border-radius: 6px; padding: 0.2em 0.7em; cursor: pointer; color: #555; }
+  .tabs button.on { background: #fff; border-color: #d0d4d8; color: #111; }
+  .editor { display: flex; max-height: 36em; overflow: auto; background: #fff; margin: 0.25em 0;
+            border: 1px solid #e1e4e8; border-radius: 8px; font: 0.82em/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .viewer .editor { border: none; margin: 0; border-radius: 0; }
+  .editor pre { margin: 0; font: inherit; }
+  .editor .gutter { padding: 0.6em 0.7em; text-align: right; color: #a0a4a8; background: #f6f8fa; user-select: none;
+                    position: sticky; left: 0; border-right: 1px solid #e1e4e8; }
+  .editor .code { flex: 1; }
+  .editor code.hljs, .editor code { display: block; padding: 0.6em 0.8em; white-space: pre; background: transparent; font: inherit; }
+  iframe.preview { width: 100%; height: 55vh; border: none; background: #fff; display: block; }
+  iframe.pdf { width: 100%; height: 65vh; border: 1px solid #ddd; border-radius: 8px; }
+  img { max-width: 100%; border: 1px solid #ddd; border-radius: 8px; }
+  table.grid { border-collapse: collapse; font-size: 0.85em; margin: 0.4em; }
+  table.grid td { border: 1px solid #ddd; padding: 0.2em 0.5em; }
+  table.grid tr:first-child td { background: #f0f2f4; font-weight: 600; }
+  .scroll { max-height: 36em; overflow: auto; }
+  .term { background: #1e1f24; color: #e6e6e6; border-radius: 10px; overflow: hidden; margin: 0.3em 0;
+          font: 0.85em/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .term-bar { display: flex; align-items: center; gap: 0.5em; background: #2c2e35; padding: 0.4em 0.8em; color: #aaa; }
+  .term-bar .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+  .term-bar .chip { margin-left: auto; } .term-bar .chip ~ .chip { margin-left: 0; }
+  .chip { font-size: 0.85em; padding: 0.05em 0.55em; border-radius: 99px; background: #444851; color: #ddd; }
+  .chip.bad { background: #8a2630; color: #fff; } .chip.good { background: #24683c; color: #fff; }
+  .term-section { padding: 0.5em 0.9em; border-top: 1px solid #33353d; }
+  .term-section .label { font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.05em; color: #888; }
+  .term pre { margin: 0.2em 0 0; white-space: pre-wrap; word-break: break-word; font: inherit; max-height: 30em; overflow: auto; }
+  .term .cmd code.hljs { background: transparent; color: #e6e6e6; padding: 0; }
+  .term .cmd .hljs-built_in, .term .cmd .hljs-keyword { color: #7cc7ff; }
+  .term .cmd .hljs-string { color: #b5e08a; } .term .cmd .hljs-variable { color: #f0b86e; }
+  .term .cmd .hljs-comment { color: #8a8f98; } .term .cmd .hljs-meta { color: #c99cf0; }
+  .term .prompt { color: #5fd38d; user-select: none; }
+  .term .stderr pre { color: #ff8b8b; }
+  .term .none { color: #777; font-style: italic; }
+  #history { width: min(900px, 94%); margin: 1em auto 3em; }
+  #history > details { background: #fff; border-radius: 10px; padding: 0.5em 0.8em; margin: 0.4em 0;
+                       border-left: 6px solid var(--c); }
+  .sent { --c: #1a9c4a; } .blocked { --c: #d23; } .auto { --c: #aaa; }
+
+  /* ---- theme: flat tiles, uppercase section labels ---- */
+  header { border-bottom: 1px solid var(--line); padding: 0.9em 0 0.7em; }
+  header h1 { font-size: 1.5em; font-weight: 700; letter-spacing: 0.02em; color: var(--brand); margin: 0; }
+  header p { font-size: 0.85em; }
+  #access h2, #style h2, h2.section { font-size: 0.85em; font-weight: 700; text-transform: uppercase;
+                                      letter-spacing: 0.08em; color: #3c3c3c; border-bottom: 2px solid var(--brand);
+                                      padding-bottom: 0.3em; }
+  #access h3 { color: var(--brand); font-weight: 400; font-size: 1.15em; }
+  #access, #style { background: #fafafa; border-color: var(--line); }
+  .card, .shadow { border-radius: 2px; border: 1px solid var(--line); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); }
+  .card .top { border-bottom: 1px solid var(--line); }
+  .title { font-weight: 600; color: #333; }
+  .badge { border-radius: 0; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.72em; }
+  .UserPromptSubmit { background: #3c3c3c; } .PreToolUse { background: var(--brand); } .PostToolUse { background: #6b6b6b; }
+  .explain { background: #eef2f7; border-left-color: var(--brand); }
+  #controls { gap: 1em; }
+  #controls button, #star { width: 58px !important; height: 58px !important; border-radius: 2px; border: 1px solid var(--line);
+                            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12); background: #fff; font-size: 1.6em !important; }
+  #controls button:hover:not(:disabled) { border-color: var(--brand); }
+  #no { color: var(--bad); } #yes { color: var(--ok); } #star { color: var(--brand); }
+  .stamp { border-radius: 2px; } .stamp.send { color: var(--ok); } .stamp.block { color: var(--bad); border-style: dashed; }
+  .stamp.trust { color: var(--brand); border-style: double; border-width: 6px; }
+  .tabs button { border-radius: 0; border: none; border-bottom: 2px solid transparent; }
+  .tabs button.on { background: none; border-bottom-color: var(--brand); color: var(--brand); }
+  .viewer, .editor, pre.plain, img, iframe.pdf { border-radius: 2px; }
+  #history > details { border-radius: 2px; border: 1px solid var(--line); border-left: 5px var(--s, solid) var(--c); }
+  .sent { --c: var(--ok); } .blocked { --c: var(--bad); --s: dashed; } .auto { --c: #999; --s: dotted; }
+  #saveStyle { background: var(--brand); border-radius: 2px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85em; }
+  #resetStyle { border-radius: 2px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85em; }
+  #styleText { border-radius: 2px; } #styleText:focus { outline-color: var(--brand); }
+  .pill { border-radius: 2px; }
+  .term { border-radius: 2px; }
+</style>
+
+<aside id="access">
+  <h2>What Claude can reach</h2>
+  <p class="legend"><span class="pill allow">&#x2713; read</span> without asking<br>
+    <span class="pill ask">? edit</span> asks you first<br><span class="pill deny">&#x2715; read</span> blocked</p>
+  <div id="tree">Loading...</div>
+  <h3>Outside the project</h3><div id="outside"></div>
+  <h3>Websites</h3><div id="sites"></div>
+  <h3>Bash commands</h3><div id="sandbox"></div>
+  <p class="note">Worked out from the settings files. Hooks (such as a script that asks before
+    touching files outside the project) can add checks this list does not show.</p>
+</aside>
+<aside id="style">
+  <h2>How Claude Code explains commands</h2>
+  <p class="note">Before a Bash command runs, Claude Code is asked to explain it following these
+    instructions. Changes apply to the next command.</p>
+  <textarea id="styleText" spellcheck="true"></textarea>
+  <div class="row-buttons">
+    <button id="saveStyle">Save</button>
+    <button id="resetStyle">Back to default</button>
+    <span id="styleMsg" class="note"></span>
+  </div>
+</aside>
+<main>
+<header>
+  <h1>LLM Checker</h1>
+  <p id="count">Nothing waiting</p>
+</header>
+<div id="deck"><div class="empty">Nothing waiting. Claude is paused or idle.</div></div>
+<div id="controls">
+  <button id="no" title="Block (left arrow)" disabled>&#x2715;</button>
+  <button id="star" title="Only for websites" disabled>&#x2605;</button>
+  <button id="yes" title="Send (right arrow)" disabled>&#x2713;</button>
+</div>
+<p class="hint">Swipe right or press &rarr; to send. Swipe left or press &larr; to block.
+  For a website, swipe up or press &uarr; to send and trust it in this project.</p>
+<h2 class="section">History</h2>
+<div id="history"></div>
+</main>
+
+<script>
+const EVENT = {UserPromptSubmit: "Prompt", PreToolUse: "Tool call", PostToolUse: "Tool result"};
+const PLAIN = /^(stdout|stderr|description|filePath|file_path|path|pattern|url)$/;
+const CODE = /^(content|oldString|newString|old_string|new_string|originalFile|file_text)$/;
+const SHEETJS = ["https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",
+                 "sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT"];
+// Previews run in a sandboxed frame: no scripts, no network, so a file Claude reads cannot act or phone home.
+const LOCKDOWN = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; ' +
+                 'style-src \'unsafe-inline\'; img-src data: blob:">' +
+                 '<style>body{font:15px system-ui,sans-serif;margin:1em;line-height:1.5}' +
+                 'table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:.2em .5em}' +
+                 'pre{background:#f6f8fa;padding:.6em;border-radius:6px;overflow:auto}</style>';
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+// ---- viewers ----
+function tabs(label, views) {
+  const box = el("div", "viewer"), bar = el("div", "tabs"), pane = el("div");
+  bar.append(el("span", "fname", label || ""));
+  for (const [name, build] of views) {
+    const b = el("button", "", name);
+    b.onclick = () => {
+      bar.querySelectorAll("button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on");
+      pane.replaceChildren(build());
+    };
+    bar.append(b);
+  }
+  box.append(bar, pane);
+  bar.querySelector("button").click();
+  return box;
+}
+
+function editor(text, lang) {
+  const box = el("div", "editor");
+  const lines = text.split("\n").length;
+  const gutter = el("pre", "gutter", Array.from({length: lines}, (_, i) => i + 1).join("\n"));
+  const pre = el("pre", "code"), code = el("code", "", text);
+  if (window.hljs) {
+    if (lang) code.className = "language-" + (hljs.getLanguage(lang) ? lang : "plaintext");
+    else if (text.length > 20000) code.className = "language-plaintext";  // auto-detect is slow on big text
+    hljs.highlightElement(code);
+  }
+  pre.append(code);
+  box.append(gutter, pre);
+  return box;
+}
+
+function sandboxed(html) {
+  const f = el("iframe", "preview");
+  f.setAttribute("sandbox", "");
+  f.srcdoc = LOCKDOWN + html;
+  return f;
+}
+
+function parseCSV(text, sep) {
+  const rows = [[]];
+  let field = "", quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"') quoted = true;
+    else if (c === sep) { rows.at(-1).push(field); field = ""; }
+    else if (c === "\n") { rows.at(-1).push(field.replace(/\r$/, "")); field = ""; rows.push([]); }
+    else field += c;
+  }
+  rows.at(-1).push(field);
+  return rows.filter(r => r.length > 1 || r[0] !== "");
+}
+
+function grid(rows) {
+  const wrap = el("div", "scroll"), table = el("table", "grid");
+  for (const r of rows) {
+    const tr = el("tr");
+    for (const cell of r) tr.append(el("td", "", cell));
+    table.append(tr);
+  }
+  wrap.append(table);
+  return wrap;
+}
+
+let sheetjs;
+function loadSheetJS() {
+  return sheetjs ??= new Promise((ok, fail) => {
+    const s = el("script");
+    s.src = SHEETJS[0]; s.integrity = SHEETJS[1]; s.crossOrigin = "anonymous";
+    s.onload = ok; s.onerror = () => fail(new Error("could not load SheetJS"));
+    document.head.append(s);
+  });
+}
+
+function workbook(bytes, label) {
+  const box = el("div", "", "Loading the spreadsheet viewer...");
+  loadSheetJS().then(() => {
+    const wb = XLSX.read(bytes, {type: "array"});
+    box.replaceChildren(tabs(label || "Workbook", wb.SheetNames.map(name =>
+      [name, () => grid(XLSX.utils.sheet_to_json(wb.Sheets[name], {header: 1, defval: ""}).map(r => r.map(String)))])));
+  }).catch(e => { box.textContent = "ZIP file, not a readable spreadsheet (" + e.message + ")"; });
+  return box;
+}
+
+// Base64 files are recognised by their first bytes, whatever field they sit in.
+const MAGIC = {"JVBERi0": "application/pdf", "iVBORw0KGgo": "image/png", "/9j/": "image/jpeg",
+               "R0lGOD": "image/gif", "UklGR": "image/webp", "UEsDBA": "application/zip"};
+function binary(s, label) {
+  const type = s.length > 100 && Object.entries(MAGIC).find(([m]) => s.startsWith(m));
+  if (!type) return;
+  let bytes;
+  try { bytes = Uint8Array.from(atob(s), c => c.charCodeAt(0)); } catch { return; }
+  if (type[1] === "application/zip") return workbook(bytes, label);
+  // ponytail: blob URLs are not revoked; a page reload frees them
+  const url = URL.createObjectURL(new Blob([bytes], {type: type[1]}));
+  if (type[1] === "application/pdf") { const f = el("iframe", "pdf"); f.src = url; return f; }
+  const img = el("img"); img.src = url;
+  return img;
+}
+
+function kindOf(s, ext) {
+  const known = {html: "html", htm: "html", md: "markdown", markdown: "markdown", svg: "svg",
+                 csv: "csv", tsv: "tsv", json: "json", plaintext: "text", txt: "text", log: "text"};
+  if (ext) return known[ext.toLowerCase()] || "code";
+  const t = s.trimStart();
+  if (/^(<!doctype html|<html)/i.test(t)) return "html";
+  if (/^<svg/i.test(t)) return "svg";
+  if (/^[\[{]/.test(t)) { try { JSON.parse(s); return "json"; } catch {} }
+  return "auto";
+}
+
+function renderString(s, hint) {
+  const file = binary(s, hint.label);
+  if (file) return file;
+  const source = lang => ["Source", () => editor(s, lang)];
+  switch (kindOf(s, hint.ext)) {
+    case "html": {
+      // Only a whole page opens as a preview; part of a file (a Read with an offset) opens as source.
+      const preview = ["Preview", () => sandboxed(s)];
+      return tabs(hint.label, /^\s*(<!doctype html|<html)/i.test(s) ? [preview, source("html")] : [source("html"), preview]);
+    }
+    case "markdown":
+      return window.marked ? tabs(hint.label, [["Preview", () => sandboxed(marked.parse(s))], source("markdown")])
+                           : editor(s, "markdown");
+    case "svg": return tabs(hint.label, [["Preview", () => {
+      const img = el("img"); img.src = URL.createObjectURL(new Blob([s], {type: "image/svg+xml"})); return img;
+    }], source("xml")]);
+    case "csv": return tabs(hint.label, [["Table", () => grid(parseCSV(s, ","))], source("plaintext")]);
+    case "tsv": return tabs(hint.label, [["Table", () => grid(parseCSV(s, "\t"))], source("plaintext")]);
+    case "json": return tabs(hint.label, [["JSON", () => editor(JSON.stringify(JSON.parse(s), null, 2), "json")]]);
+    case "code": return tabs(hint.label, [[hint.ext, () => editor(s, hint.ext)]]);
+    case "text": return el("pre", "plain", s);
+    default: return editor(s);
+  }
+}
+
+function isInline(v) {
+  return v === null || typeof v !== "object" && !(typeof v === "string" && (v.includes("\n") || v.length > 160));
+}
+
+// Objects as foldable fields, short values inline, every string through the matching viewer.
+function render(v, hint = {}) {
+  if (typeof v === "string") return renderString(v, hint);
+  if (Array.isArray(v) && v.length && v.every(l => typeof l === "string" && /^[-+ \\]/.test(l)))
+    return editor(v.join("\n"), "diff");
+  if (v && typeof v === "object") {
+    const path = [v.filePath, v.file_path, v.path].find(p => typeof p === "string");
+    const name = path && path.split("/").pop();
+    const ext = name && name.includes(".") ? name.split(".").pop() : undefined;
+    const box = el("div");
+    for (const [k, child] of Object.entries(v)) {
+      const label = Array.isArray(v) ? "[" + k + "]" : k;
+      if (isInline(child)) {
+        const row = el("div", "row");
+        row.append(el("span", "key", label), el("span", "val", String(child)));
+        box.append(row);
+        continue;
+      }
+      const childHint = k === "command" ? {ext: "bash", label: "shell command"}
+                      : PLAIN.test(k) ? {ext: "plaintext"}
+                      : CODE.test(k) ? {ext, label: name} : {label: name};
+      const d = el("details");
+      const r = render(child, childHint);
+      d.open = !(r.classList.contains("plain") && r.textContent.length > 5000);
+      d.append(el("summary", "", label), r);
+      box.append(d);
+    }
+    return box;
+  }
+  return el("span", "val", String(v));
+}
+
+function header(item) {
+  const head = el("div", "top");
+  head.append(el("span", "badge " + item.event, EVENT[item.event] || item.event),
+              el("span", "title", "#" + item.id + "  " + item.title));
+  if (item.summary) {
+    const p = el("p", "explain");
+    p.append(el("b", "", "Claude Code explains: "), item.summary);
+    head.append(p);
+  }
+  return head;
+}
+
+// Bash calls and results as a terminal: the command, then stdout and stderr, with status chips.
+const BASH_SHOWN = new Set(["command", "description", "stdout", "stderr", "interrupted", "isImage"]);
+function terminal(item) {
+  const pre = item.event === "PreToolUse";
+  const input = (pre ? item.content : item.input) || {};
+  const out = pre ? {} : item.content || {};
+  const term = el("div", "term"), bar = el("div", "term-bar");
+  for (const c of ["#ff5f57", "#febc2e", "#28c840"]) { const d = el("span", "dot"); d.style.background = c; bar.append(d); }
+  bar.append(el("span", "", pre ? "bash: Claude wants to run" : "bash: output going to Claude"));
+  const chips = [];
+  if (input.run_in_background) chips.push(["runs in background", ""]);
+  if (input.timeout) chips.push(["timeout " + Math.round(input.timeout / 1000) + " s", ""]);
+  if (!pre) {
+    if (out.interrupted) chips.push(["interrupted", "bad"]);
+    else chips.push([out.stderr ? "finished, with stderr" : "finished", out.stderr ? "bad" : "good"]);
+  }
+  for (const [text, cls] of chips) bar.append(el("span", "chip " + cls, text));
+  term.append(bar);
+
+  const section = (label, cls, content) => {
+    const s = el("div", "term-section " + cls);
+    s.append(el("div", "label", label), content);
+    term.append(s);
+  };
+  const cmd = el("pre", "cmd"), code = el("code", "", input.command || "");
+  if (window.hljs) { code.className = "language-bash"; hljs.highlightElement(code); }
+  cmd.append(el("span", "prompt", "$ "), code);
+  section("command", "", cmd);
+
+  if (!pre) {
+    const shown = text => text ? el("pre", "", text) : el("pre", "none", "(empty)");
+    section("stdout", "stdout", out.isImage ? binary(out.stdout) || shown(out.stdout) : shown(out.stdout));
+    section("stderr", "stderr", shown(out.stderr));
+  }
+  const rest = Object.fromEntries(Object.entries(pre ? input : out).filter(([k]) => !BASH_SHOWN.has(k)));
+  const box = el("div");
+  box.append(term);
+  if (Object.keys(rest).length) box.append(render(rest));
+  return box;
+}
+
+function body(item) {
+  const div = el("div", "body");
+  if (item.tool === "Bash") div.append(terminal(item));
+  else div.append(render(item.content, item.event === "UserPromptSubmit" ? {ext: "md", label: "your prompt"} : {}));
+  return div;
+}
+
+// ---- deck and swiping ----
+const deck = document.getElementById("deck");
+const yes = document.getElementById("yes"), no = document.getElementById("no");
+let current = null, deciding = false;
+
+async function decide(approve, trust = false) {
+  if (!current || deciding || (trust && !current.site)) return;
+  deciding = true;
+  const card = deck.querySelector(".card");
+  card.style.transform = trust ? "translateY(-120vh)"
+                               : `translateX(${approve ? 150 : -150}vw) rotate(${approve ? 30 : -30}deg)`;
+  await fetch("/decide", {method: "POST", body: JSON.stringify({id: current.id, approve, trust})});
+  setTimeout(() => { deciding = false; current = null; refresh(); if (trust) loadAccess(); }, 250);
+}
+
+function makeCard(item) {
+  const card = el("div", "card");
+  const send = el("div", "stamp send", "SEND"), block = el("div", "stamp block", "BLOCK");
+  card.append(header(item), body(item), send, block);
+
+  const trustStamp = el("div", "stamp trust", "TRUST SITE");
+  if (item.site) card.append(trustStamp);
+
+  let startX = null, startY = 0, dx = 0, dy = 0;
+  card.addEventListener("pointerdown", e => {
+    if (e.button !== 0 || e.target.closest("pre, iframe, img, table, summary, button, .val, .explain, .editor")) return;
+    startX = e.clientX; startY = e.clientY; dx = dy = 0;
+    card.classList.add("dragging");
+    card.setPointerCapture(e.pointerId);
+  });
+  card.addEventListener("pointermove", e => {
+    if (startX === null) return;
+    dx = e.clientX - startX;
+    dy = item.site ? Math.min(0, e.clientY - startY) : 0;  // upward drag only matters for websites
+    card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 20}deg)`;
+    const up = -dy > Math.abs(dx);
+    send.style.opacity = up ? 0 : Math.max(0, dx / 120);
+    block.style.opacity = up ? 0 : Math.max(0, -dx / 120);
+    trustStamp.style.opacity = up ? -dy / 120 : 0;
+  });
+  const end = () => {
+    if (startX === null) return;
+    startX = null;
+    card.classList.remove("dragging");
+    if (-dy > 120 && -dy > Math.abs(dx)) return decide(true, true);
+    if (Math.abs(dx) > 120) return decide(dx > 0);
+    card.style.transform = "";
+    send.style.opacity = block.style.opacity = trustStamp.style.opacity = 0;
+  };
+  card.addEventListener("pointerup", end);
+  card.addEventListener("pointercancel", end);
+  return card;
+}
+
+const star = document.getElementById("star");
+yes.onclick = () => decide(true);
+no.onclick = () => decide(false);
+star.onclick = () => decide(true, true);
+document.addEventListener("keydown", e => {
+  if (e.target.closest("textarea, input")) return;  // arrow keys edit text there, not cards
+  if (e.key === "ArrowRight") decide(true);
+  if (e.key === "ArrowLeft") decide(false);
+  if (e.key === "ArrowUp") { e.preventDefault(); decide(true, true); }
+});
+
+// ---- sidebar: what Claude can reach ----
+function pill(kind, label, why) {
+  const p = el("span", "pill " + kind, {allow: "✓ ", ask: "? ", deny: "✕ "}[kind] + label);
+  p.title = label + ": " + {allow: "without asking", ask: "asks you first", deny: "blocked"}[kind] + "\n" + why;
+  return p;
+}
+function treeNode(n, depth) {
+  const row = [el("span", "", n.dir ? "\u{1F4C1}" : "\u{1F4C4}"), el("span", "name", n.name),
+               pill(n.read, "read", n.readWhy), pill(n.edit, "edit", n.editWhy)];
+  if (!n.dir) { const f = el("div", "file tint-" + n.read); f.append(...row); return f; }
+  const d = el("details"), s = el("summary", "tint-" + n.read);
+  d.open = depth < 2;
+  s.append(...row);
+  d.append(s, ...n.children.map(c => treeNode(c, depth + 1)));
+  if (n.truncated) d.append(el("div", "file", "... more not shown"));
+  return d;
+}
+function list(items, text) {
+  const ul = el("ul");
+  for (const i of items) { const li = el("li"); li.append(pill(i.kind, i.label || i.kind, i.why || ""), " ", text(i)); ul.append(li); }
+  return items.length ? ul : el("p", "note", "None.");
+}
+let accessKey = "";
+async function loadAccess() {
+  const text = await (await fetch("/access")).text();
+  if (text === accessKey) return;  // unchanged: keep the folders you opened or closed
+  accessKey = text;
+  const a = JSON.parse(text);
+  document.getElementById("tree").replaceChildren(treeNode(a.tree, 0));
+  const outside = a.outside.map(o => ({...o, label: o.action, why: o.rule + " (" + o.source + ")"}));
+  const allowed = outside.filter(o => o.kind === "allow");
+  const out = el("div");
+  out.append(list(allowed, o => o.path));
+  for (const [kind, text] of [["deny", "blocked"], ["ask", "asks you first"]]) {
+    const group = outside.filter(o => o.kind === kind);
+    if (!group.length) continue;
+    const d = el("details");  // collapsed: long lists of protective rules
+    d.append(el("summary", "", group.length + " " + text), list(group, o => o.path));
+    out.append(d);
+  }
+  document.getElementById("outside").replaceChildren(out);
+  const project = a.sites.filter(s => s.source === "project" || s.source === "local");
+  const other = a.sites.filter(s => !project.includes(s));
+  const sites = el("div");
+  sites.append(el("p", "note", "Trusted in this project:"),
+               list(project.map(s => ({...s, label: s.tool})), s => s.site));
+  if (other.length) {
+    const d = el("details");
+    d.append(el("summary", "", other.length + " rules from your user or managed settings"),
+             list(other.map(s => ({...s, label: s.tool, why: s.source + " settings"})), s => s.site));
+    sites.append(d);
+  }
+  document.getElementById("sites").replaceChildren(sites);
+  const sb = a.sandbox, box = el("div");
+  if (!sb.enabled) box.append(el("p", "warn-box", (sb.windows ?
+      "Your settings turn the sandbox on, but Claude Code has no sandbox on native Windows (only inside WSL2). " : "") +
+      "Bash commands are not sandboxed: they can read and change anything your user account can, " +
+      "whatever the rules above say."));
+  else {
+    const d = el("details");  // collapsed by default; the warning above stays open when the sandbox is off
+    d.append(el("summary", "", "Sandbox on: changes only in the project and " + (sb.allowWrite || []).length + " more folders"));
+    box.append(d);
+    d.append(el("p", "", "Bash commands run in a sandbox. They can change files only in the project, " +
+                   "temporary folders and these folders:"),
+               list((sb.allowWrite || []).map(path => ({kind: "allow", label: "edit", why: "sandbox allowWrite", path})),
+                    i => i.path));
+    d.append(el("p", "note", "They can read every file except those the Read deny rules and the sandbox denyRead list block."));
+  }
+  document.getElementById("sandbox").replaceChildren(box);
+}
+loadAccess();
+setInterval(loadAccess, 15000);
+
+// ---- right side: how Claude Code explains commands ----
+const styleText = document.getElementById("styleText"), styleMsg = document.getElementById("styleMsg");
+let defaultStyle = "";
+async function saveStyle(text) {
+  const r = await fetch("/style", {method: "POST", body: JSON.stringify({style: text})});
+  styleText.value = (await r.json()).style;
+  styleMsg.textContent = "Saved";
+  setTimeout(() => { styleMsg.textContent = ""; }, 2000);
+}
+fetch("/style").then(r => r.json()).then(s => { styleText.value = s.style; defaultStyle = s.default; });
+document.getElementById("saveStyle").onclick = () => saveStyle(styleText.value);
+document.getElementById("resetStyle").onclick = () => saveStyle(defaultStyle);
+styleText.addEventListener("input", () => { styleMsg.textContent = "Not saved yet"; });
+
+// ---- polling ----
+let historyKey = "";
+async function refresh() {
+  if (deciding) return;
+  const state = await (await fetch("/state")).json();
+  const next = state.pending[0] || null;
+  const n = state.pending.length;
+  document.getElementById("count").textContent = n ? n + " waiting" : "Nothing waiting";
+  document.title = n ? "(" + n + ") LLM Checker" : "LLM Checker";
+  star.disabled = !(next && next.site);
+  star.title = next && next.site ? "I trust " + next.site + ": send, and stop asking for it in this project (up arrow)"
+                                 : "Only for websites";
+  yes.disabled = no.disabled = !next;
+
+  if ((next && next.id) !== (current && current.id)) {  // re-render only when the top card changes
+    current = next;
+    deck.replaceChildren();
+    if (!current) deck.append(el("div", "empty", "Nothing waiting. Claude is paused or idle."));
+    else {
+      for (let i = 2; i >= 1; i--) {
+        const s = el("div", "shadow");
+        s.style.setProperty("--y", i * 10 + "px");
+        s.style.setProperty("--s", 1 - i * 0.03);
+        deck.append(s);
+      }
+      deck.append(makeCard(current));
+    }
+  }
+  // Shadows show how many more cards wait behind the top card.
+  deck.querySelectorAll(".shadow").forEach((s, i) => { s.hidden = 2 - i > n - 1; });
+
+  const key = state.history.map(i => i.id).join();
+  if (key !== historyKey) {
+    historyKey = key;
+    document.getElementById("history").replaceChildren(...state.history.map(item => {
+      const kind = item.title.endsWith("(automatic)") ? "auto" : item.approved ? "sent" : "blocked";
+      const d = el("details", kind);
+      d.append(el("summary", "", "#" + item.id + "  " + (EVENT[item.event] || item.event) + ": " +
+                                 item.title + "  (" + (kind === "auto" ? "automatic" : kind) + ")"));
+      d.addEventListener("toggle", () => { if (d.open && d.children.length === 1) d.append(header(item), body(item)); });
+      return d;
+    }));
+  }
+}
+setInterval(refresh, 1000);
+refresh();
+</script>
+</html>
