@@ -22,14 +22,21 @@ REJECTED = "[withheld: rejected in the approval page]"
 # How Claude Code should explain a Bash command. Editable on the page; saved in STYLE_FILE.
 DEFAULT_STYLE = (
     "Up to three plain sentences for a science student who knows the project's folders and files "
-    "but not computer science terms. Name the files and folders by their paths, say what happens "
-    "to them and what the user gets back, and say whether anything is deleted, overwritten or sent "
-    "over the internet (and to which website). Avoid jargon such as pipe, stdout, flag, regex, "
-    "process or shell; if a tool name such as git, grep or curl is unavoidable, say in a few words "
-    "what it is for."
+    "but not computer science terms. The main question is which internal data this command would "
+    "send to Claude: name the files and folders it reads by their paths, say what of their content "
+    "will appear in the output that goes to Claude, and warn clearly if that output could contain "
+    "passwords, keys, personal data, unpublished results or other internal information. Then say "
+    "whether anything is sent over the internet (and to which website), deleted or overwritten. "
+    "Avoid jargon such as pipe, stdout, flag, regex, process or shell; if a tool name such as git, "
+    "grep or curl is unavoidable, say in a few words what it is for."
 )
 DATA = Path.home() / ".llm-checker"  # survives plugin updates, which replace the plugin folder
 STYLE_FILE = DATA / "explain-style.txt"
+
+FAILURE_STOP = ("Stopped in LLM Checker: you blocked the error output of a tool. It is still in the "
+                "conversation and goes to Claude with your next message, unless you rewind to before this step.")
+FAILURE_NOTE = ("Blocking an error stops Claude before it reads it. The error stays in the conversation: "
+                "rewind to before this step, or it goes to Claude with your next message.")
 
 
 def style():
@@ -67,6 +74,8 @@ def view(hook, ask_summary):
         return f"Claude asks to run {hook.get('tool_name')}", hook.get("tool_input")
     if event == "PostToolUse":
         return f"Result of {hook.get('tool_name')} -> Claude", hook.get("tool_response")
+    if event == "PostToolUseFailure":
+        return f"Error of {hook.get('tool_name')} -> Claude", {"error": hook.get("error")}
     return event, hook
 
 
@@ -102,6 +111,9 @@ def answer(hook, approve, ask_summary):
             "hookEventName": "PostToolUse",
             "updatedToolOutput": redact(hook.get("tool_response")),
         }}
+    if event == "PostToolUseFailure":
+        # Claude Code offers no way to replace error text, so blocking stops Claude before its next request.
+        return {"continue": False, "stopReason": FAILURE_STOP}
     return {"decision": "block", "reason": "Rejected in the approval page."}
 
 
@@ -173,6 +185,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if bash:
                 item["summary"] = hook["tool_input"].get("description")
+            if hook.get("hook_event_name") == "PostToolUseFailure":
+                item["note"] = FAILURE_NOTE
             if hook.get("tool_name") == "WebFetch" and access.host(url):
                 item["site"] = access.host(url)
             entry = {"item": item, "event": threading.Event(), "approve": False, "root": root}

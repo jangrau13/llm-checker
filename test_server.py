@@ -100,4 +100,12 @@ bash_out = {"stdout": "secret", "stderr": "", "interrupted": False, "isImage": F
 _, out = hook_then_decide({"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_response": bash_out}, False)
 assert out["hookSpecificOutput"]["updatedToolOutput"] == {**bash_out, "stdout": server.REJECTED, "stderr": server.REJECTED}
 assert post("/hook", {"hook_event_name": "UserPromptSubmit", "prompt": "hi"}) == {}
+
+# A failed command waits too; blocking it stops Claude, since error text cannot be replaced.
+failure = {"hook_event_name": "PostToolUseFailure", "tool_name": "Bash", "tool_input": {"command": "cat key"},
+           "error": "Exit code 1\nAPI_KEY=abc"}
+item, out = hook_then_decide(failure, False)
+assert item["content"] == {"error": "Exit code 1\nAPI_KEY=abc"} and item["note"] == server.FAILURE_NOTE
+assert out == {"continue": False, "stopReason": server.FAILURE_STOP}
+assert hook_then_decide(failure, True)[1] == {}
 print("ok")

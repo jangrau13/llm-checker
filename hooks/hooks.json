@@ -16,6 +16,9 @@
     ],
     "PostToolUse": [
       { "matcher": "*", "hooks": [{ "type": "http", "url": "http://127.0.0.1:1308/hook", "timeout": 3600, "onFailure": "block" }] }
+    ],
+    "PostToolUseFailure": [
+      { "matcher": "*", "hooks": [{ "type": "http", "url": "http://127.0.0.1:1308/hook", "timeout": 3600, "onFailure": "block" }] }
     ]
   }
 }

@@ -146,7 +146,9 @@
   .title { font-weight: 600; color: #333; }
   .badge { border-radius: 0; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.72em; }
   .UserPromptSubmit { background: #3c3c3c; } .PreToolUse { background: var(--brand); } .PostToolUse { background: #6b6b6b; }
+  .PostToolUseFailure { background: var(--bad); }
   .explain { background: #eef2f7; border-left-color: var(--brand); }
+  .explain.warn-note { background: #fff8e8; border-left: 4px dashed #8a6d1d; }
   #controls { gap: 1em; }
   #controls button, #star { width: 58px !important; height: 58px !important; border-radius: 2px; border: 1px solid var(--line);
                             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12); background: #fff; font-size: 1.6em !important; }
@@ -206,7 +208,8 @@
 </main>
 
 <script>
-const EVENT = {UserPromptSubmit: "Prompt", PreToolUse: "Tool call", PostToolUse: "Tool result"};
+const EVENT = {UserPromptSubmit: "Prompt", PreToolUse: "Tool call", PostToolUse: "Tool result",
+               PostToolUseFailure: "Tool error"};
 const PLAIN = /^(stdout|stderr|description|filePath|file_path|path|pattern|url)$/;
 const CODE = /^(content|oldString|newString|old_string|new_string|originalFile|file_text)$/;
 const SHEETJS = ["https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",
@@ -411,6 +414,11 @@ function header(item) {
     p.append(el("b", "", "Claude Code explains: "), item.summary);
     head.append(p);
   }
+  if (item.note) {
+    const p = el("p", "explain warn-note");
+    p.append(el("b", "", "Note: "), item.note);
+    head.append(p);
+  }
   return head;
 }
 
@@ -426,7 +434,9 @@ function terminal(item) {
   const chips = [];
   if (input.run_in_background) chips.push(["runs in background", ""]);
   if (input.timeout) chips.push(["timeout " + Math.round(input.timeout / 1000) + " s", ""]);
-  if (!pre) {
+  const failed = item.event === "PostToolUseFailure";
+  if (failed) chips.push(["failed", "bad"]);
+  else if (!pre) {
     if (out.interrupted) chips.push(["interrupted", "bad"]);
     else chips.push([out.stderr ? "finished, with stderr" : "finished", out.stderr ? "bad" : "good"]);
   }
@@ -443,6 +453,12 @@ function terminal(item) {
   cmd.append(el("span", "prompt", "$ "), code);
   section("command", "", cmd);
 
+  if (failed) {
+    section("error output going to Claude", "stderr", el("pre", "", out.error || "(empty)"));
+    const box = el("div");
+    box.append(term);
+    return box;
+  }
   if (!pre) {
     const shown = text => text ? el("pre", "", text) : el("pre", "none", "(empty)");
     section("stdout", "stdout", out.isImage ? binary(out.stdout) || shown(out.stdout) : shown(out.stdout));
