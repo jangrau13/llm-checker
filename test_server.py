@@ -49,9 +49,23 @@ item, out = hook_then_decide(changed, True)
 assert item["summary"] == "Lists the files in this folder." and item["content"]["command"] == "ls -la" and out == {}
 assert opened, "a waiting card opens the page when none is open"
 
+# Turned off: steps pass without a card but stay in the history; turned on again, they wait.
+post("/pause", {"paused": True})
+assert post("/hook", ls_explained) == {}
+state = json.loads(urllib.request.urlopen(base + "/state").read())
+assert state["paused"] and not state["pending"] and "checker off" in state["history"][0]["title"]
+post("/pause", {"paused": False})
+
+# A subagent's step carries its type, and its Bash calls are explained separately from the main conversation.
+sub = {"hook_event_name": "PostToolUse", "tool_name": "Grep", "agent_id": "a1", "agent_type": "Explore",
+       "tool_response": {"matches": []}}
+item, _ = hook_then_decide(sub, True)
+assert item["agent"] == "Explore"
+assert reason(post("/hook", {**ls, "agent_id": "a1"})) == server.summary_request()
+
 # The same call twice (hooks in a settings file and in the plugin): a single card, the same answer for both.
 twice = {**ls_explained, "tool_use_id": "toolu_1"}
-server.explained.add("s")
+server.explained.add(("s", None))
 outs = []
 threads = [threading.Thread(target=lambda: outs.append(post("/hook", twice))) for _ in range(2)]
 for t in threads:

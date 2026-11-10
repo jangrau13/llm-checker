@@ -56,6 +56,7 @@ def summary_request():
 PASS_THROUGH = {("UserPromptSubmit", None)} | {("PreToolUse", t) for t in ("Read", "Edit", "Write", "ToolSearch")} | {
     ("PostToolUse", t) for t in ("Edit", "Write", "ToolSearch")}
 
+paused = [False]  # "Turn off" on the page; back on after a server restart, the safe default
 inflight = {}  # (event, tool_use_id) -> answer slot; ponytail: never pruned, a few KB per session
 last_poll = [0.0]  # when a page last asked for /state
 last_open = [0.0]
@@ -76,7 +77,7 @@ lock = threading.Lock()
 ids = itertools.count(1)
 pending = {}  # id -> {"item": dict, "event": Event, "approve": bool}
 history = []  # decided items, newest first
-explained = set()  # sessions whose next Bash call carries the explanation Claude Code was asked for
+explained = set()  # (session, agent) whose next Bash call carries the explanation Claude Code was asked for
 last_root = [access.project_root()]  # project of the latest hook call; the sidebar shows its access
 
 
@@ -143,6 +144,11 @@ def handle_hook(hook):
         return {}
     root = access.project_root(hook.get("cwd"))
     last_root[0] = root
+    if paused[0]:  # turned off on the page: logged, everything passes
+        with lock:
+            history.insert(0, {"id": next(ids), "event": event, "tool": tool, "content": view(hook, False)[1],
+                               "title": f"{view(hook, False)[0]} (checker off, automatic)", "approved": True})
+        return {}
     url = (hook.get("tool_input") or {}).get("url")
     if tool == "WebFetch" and access.trusted(root, url):
         with lock:  # a site trusted for this project: logged, no click needed
@@ -153,7 +159,7 @@ def handle_hook(hook):
     bash = event == "PreToolUse" and tool == "Bash"
     # Keyed by session, not by command: Claude often adjusts the command when it retries.
     # The card shows the command that will really run, so the change cannot slip past.
-    key = hook.get("session_id")
+    key = (hook.get("session_id"), hook.get("agent_id"))  # a subagent's Bash calls are explained on their own
     with lock:
         ask_summary = bash and key not in explained
         if bash:
@@ -161,6 +167,8 @@ def handle_hook(hook):
     title, content = view(hook, ask_summary)
     item = {"id": next(ids), "event": event, "title": title, "content": content,
             "session": hook.get("session_id"), "tool": tool, "input": hook.get("tool_input")}
+    if hook.get("agent_id"):  # the step comes from a subagent, not from the main conversation
+        item["agent"] = hook.get("agent_type") or "subagent"
     if ask_summary:  # automatic: logged in the history, no click needed
         with lock:
             explained.add(key)
@@ -204,7 +212,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/state":
             last_poll[0] = time.time()
             with lock:
-                self.send(200, {"pending": [p["item"] for p in pending.values()], "history": history[:50]})
+                self.send(200, {"pending": [p["item"] for p in pending.values()], "history": history[:50],
+                                "paused": paused[0]})
         elif self.path == "/access":
             self.send(200, access.access(last_root[0]))
         elif self.path == "/style":
@@ -247,6 +256,9 @@ class Handler(BaseHTTPRequestHandler):
                     history.insert(0, entry["item"])
                     entry["event"].set()
             self.send(200 if entry else 404, {})
+        elif self.path == "/pause":
+            paused[0] = bool(self.read_json().get("paused"))  # cards already waiting keep waiting
+            self.send(200, {"paused": paused[0]})
         elif self.path == "/style":
             text = str(self.read_json().get("style", "")).strip()
             STYLE_FILE.parent.mkdir(parents=True, exist_ok=True)

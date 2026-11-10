@@ -147,6 +147,12 @@
   .badge { border-radius: 0; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.72em; }
   .UserPromptSubmit { background: #3c3c3c; } .PreToolUse { background: var(--brand); } .PostToolUse { background: #6b6b6b; }
   .PostToolUseFailure { background: var(--bad); }
+  .badge.agent { background: #fff; color: var(--ink); border: 1.5px dashed var(--ink); }
+  #power { margin-top: 0.5em; border: 1.5px solid var(--ink); background: #fff; color: var(--ink); border-radius: 2px;
+           padding: 0.3em 1em; cursor: pointer; font: inherit; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.05em; }
+  #power.off { background: var(--ink); color: #fff; }
+  #offBanner { margin: 0.6em auto 0; width: min(900px, 94%); padding: 0.5em 0.8em; font-weight: 600;
+               border: 2px dashed var(--bad); background: repeating-linear-gradient(135deg, #f6e3e1 0 6px, #fff 6px 12px); }
   .explain { background: #eef2f7; border-left-color: var(--brand); }
   .explain.warn-note { background: #fff8e8; border-left: 4px dashed #8a6d1d; }
   #controls { gap: 1em; }
@@ -194,6 +200,8 @@
 <header>
   <h1>LLM Checker</h1>
   <p id="count">Nothing waiting</p>
+  <button id="power" title="Turn the checker off or on">Turn off</button>
+  <p id="offBanner" hidden>Checker is off: every step goes to Claude without a card. Steps are still listed in the history.</p>
 </header>
 <div id="deck"><div class="empty">Nothing waiting. Claude is paused or idle.</div></div>
 <div id="controls">
@@ -407,8 +415,9 @@ function render(v, hint = {}) {
 
 function header(item) {
   const head = el("div", "top");
-  head.append(el("span", "badge " + item.event, EVENT[item.event] || item.event),
-              el("span", "title", "#" + item.id + "  " + item.title));
+  head.append(el("span", "badge " + item.event, EVENT[item.event] || item.event));
+  if (item.agent) head.append(el("span", "badge agent", "Subagent: " + item.agent));
+  head.append(el("span", "title", "#" + item.id + "  " + item.title));
   if (item.summary) {
     const p = el("p", "explain");
     p.append(el("b", "", "Claude Code explains: "), item.summary);
@@ -533,6 +542,11 @@ function makeCard(item) {
 }
 
 const star = document.getElementById("star");
+const power = document.getElementById("power");
+power.onclick = async () => {
+  await fetch("/pause", {method: "POST", body: JSON.stringify({paused: power.textContent === "Turn off"})});
+  refresh();
+};
 yes.onclick = () => decide(true);
 no.onclick = () => decide(false);
 star.onclick = () => decide(true, true);
@@ -638,7 +652,10 @@ async function refresh() {
   const next = state.pending[0] || null;
   const n = state.pending.length;
   document.getElementById("count").textContent = n ? n + " waiting" : "Nothing waiting";
-  document.title = n ? "(" + n + ") LLM Checker" : "LLM Checker";
+  document.title = (state.paused ? "[OFF] " : "") + (n ? "(" + n + ") LLM Checker" : "LLM Checker");
+  power.textContent = state.paused ? "Turn on" : "Turn off";
+  power.classList.toggle("off", state.paused);
+  document.getElementById("offBanner").hidden = !state.paused;
   star.disabled = !(next && next.site);
   star.title = next && next.site ? "I trust " + next.site + ": send, and stop asking for it in this project (up arrow)"
                                  : "Only for websites";
@@ -667,7 +684,8 @@ async function refresh() {
     document.getElementById("history").replaceChildren(...state.history.map(item => {
       const kind = item.title.endsWith("(automatic)") ? "auto" : item.approved ? "sent" : "blocked";
       const d = el("details", kind);
-      d.append(el("summary", "", "#" + item.id + "  " + (EVENT[item.event] || item.event) + ": " +
+      d.append(el("summary", "", "#" + item.id + "  " + (item.agent ? "[Subagent: " + item.agent + "] " : "") +
+                                 (EVENT[item.event] || item.event) + ": " +
                                  item.title + "  (" + (kind === "auto" ? "automatic" : kind) + ")"));
       d.addEventListener("toggle", () => { if (d.open && d.children.length === 1) d.append(header(item), body(item)); });
       return d;
