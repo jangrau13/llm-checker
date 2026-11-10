@@ -12,7 +12,7 @@ Claude Code can run commands, read files and fetch web pages on your computer. L
 - Swipe right or press Right Arrow, Enter or Y to send. Swipe left or press Left Arrow or N to block. Swipe up or press Up Arrow or T to send a web fetch result and trust its site for the project. Press O to send the original with all findings.
 - The access panel shows the read and edit rules calculated from your Claude Code settings.
 
-Prompts, Read, Edit and Write calls, and web search and web fetch calls pass through because Claude Code already displays them or asks for them. Content returned by Read waits for review.
+Prompts, Read, Edit and Write calls, and web search and web fetch calls pass through because Claude Code already displays them or asks for them. Content returned by Read waits for review when the local checks find something, and always when **Cautiousness high** is ticked.
 
 ## Requirements
 

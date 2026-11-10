@@ -369,6 +369,11 @@ def handle_hook(hook):
     if event in ("PostToolUse", "PostToolUseFailure"):
         item["findings"] = findings(content)  # what is about to reach Claude, checked locally
         item["cleanable"] = event == "PostToolUse" and bool(item["findings"])
+    # File content is already visible in the editor: without "Cautiousness high" it waits only with findings.
+    if event == "PostToolUse" and tool in ("Read", "NotebookRead") and not item["findings"] and not bash_before[0]:
+        with lock:
+            history.insert(0, {**item, "title": f"{tool} result sent: no findings", "approved": True, "automatic": True})
+        return {}
     if tool == "WebFetch" and access.host(url):
         item["site"] = access.host(url)
     entry = {"item": item, "event": threading.Event(), "approve": False, "clean": False, "root": root}

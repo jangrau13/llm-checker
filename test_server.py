@@ -109,6 +109,16 @@ server.STYLE_FILE.unlink()
 item, out = hook_then_decide(ls_explained, False)
 assert reason(out) != server.summary_request()
 
+# Without "Cautiousness high", a Read result waits only when it has findings.
+post("/bash-before", {"on": False})
+read = {"hook_event_name": "PostToolUse", "tool_name": "Read", "tool_input": {"file_path": "/x/model.py"},
+        "tool_response": {"type": "text", "file": {"content": "K = 0.41\n"}}}
+assert post("/hook", read) == {} and "no findings" in server.history[0]["title"]
+leak = {**read, "tool_response": {"type": "text", "file": {"content": "mail anna@example.org\n"}}}
+item, out = hook_then_decide(leak, True)
+assert item["findings"] and out == {}
+post("/bash-before", {"on": True})
+
 # Read, Edit and Write calls skip the page; only the content of a Read result waits.
 assert post("/hook", {"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {}}) == {}
 assert post("/hook", {"hook_event_name": "PostToolUse", "tool_name": "Edit", "tool_response": {}}) == {}
