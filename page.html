@@ -56,7 +56,7 @@
   .warn-box { background: #fbe4e6; border-left: 4px solid var(--bad); padding: 0.4em 0.6em; border-radius: 4px; }
   #star { color: var(--accent); font-size: 1.5em !important; width: 52px !important; height: 52px !important; align-self: center; }
   @media (max-width: 1200px) { main { margin: 0; } #access, #style { position: static; width: auto; border: none; } }
-  #deck { position: relative; width: min(900px, 94%); height: calc(100vh - 230px); min-height: 360px; margin: 0.6em auto 0; }
+  #deck { position: relative; width: min(900px, 94%); height: calc(100vh - 265px); min-height: 360px; margin: 0.6em auto 0; }
   .card, .shadow { position: absolute; inset: 0; border-radius: 18px; background: #fff;
                    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12); }
   .shadow { transform: translateY(var(--y)) scale(var(--s)); opacity: 0.6; }
@@ -67,7 +67,6 @@
   .card .body { flex: 1; overflow: auto; padding: 0.6em 1.2em 1.2em; user-select: text; cursor: auto; }
   .badge { display: inline-block; padding: 0.15em 0.6em; border-radius: 99px; font-size: 0.8em; font-weight: 600;
            color: #fff; margin-right: 0.5em; vertical-align: middle; }
-  .UserPromptSubmit { background: #6a4bc4; } .PreToolUse { background: #c27a00; } .PostToolUse { background: #1f7a8c; }
   .title { font-size: 1.15em; font-weight: 600; vertical-align: middle; }
   .explain { background: #fff6dd; border-left: 4px solid #e0a800; padding: 0.5em 0.8em; margin: 0.6em 0 0; }
   .stamp { position: absolute; top: 1.2em; padding: 0.1em 0.5em; border: 4px solid; border-radius: 8px;
@@ -165,9 +164,40 @@
   .card .top { border-bottom: 1px solid var(--line); }
   .title { font-weight: 600; color: #333; }
   .badge { border-radius: 0; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.72em; }
-  .UserPromptSubmit { background: #3c3c3c; } .PreToolUse { background: var(--brand); } .PostToolUse { background: #6b6b6b; }
-  .PostToolUseFailure { background: var(--bad); }
   .badge.agent { background: #fff; color: var(--ink); border: 1.5px dashed var(--ink); }
+  /* ---- kinds of review: each has an icon, a name and its own top-line style, so they differ in greyscale ---- */
+  .kind-command { --kc: #1f3a5f; --kbg: #eef2f7; }
+  .kind-output  { --kc: #2f4858; --kbg: #eef3f4; --ks: double; }
+  .kind-file    { --kc: #3d4f3d; --kbg: #f0f4ef; }
+  .kind-search  { --kc: #4b3f63; --kbg: #f3f1f7; --ks: double; }
+  .kind-web     { --kc: #245a78; --kbg: #edf4f8; --ks: dashed; }
+  .kind-mcp     { --kc: #6a4e1e; --kbg: #f8f3ea; --ks: dotted; }
+  .kind-error   { --kc: var(--bad); --ks: dashed;
+                  --kbg: repeating-linear-gradient(135deg, #fbeceb 0 6px, #fff 6px 12px); }
+  .kind-prompt, .kind-other { --kc: #555; --kbg: #f4f4f4; }
+  .card { border-top: 5px var(--ks, solid) var(--kc, var(--line)); }
+  .kicon { display: inline-flex; width: 18px; height: 18px; flex: none; vertical-align: -4px; }
+  .kicon svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8;
+               stroke-linecap: round; stroke-linejoin: round; }
+  .kindbar { display: flex; align-items: center; gap: 0.55em; margin: 0.4em 0 0.7em; padding: 0.5em 1.2em;
+             background: var(--kbg); color: var(--kc); border-bottom: 1px solid var(--line); }
+  .card .kindbar { margin: -1em -1.2em 0.7em; }
+  #history summary .kicon { color: var(--kc); }
+  .kindlabel { font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+  .kindbar .check { margin-left: auto; font-size: 0.85em; color: #3c3c3c; text-align: right; }
+  #queue { width: min(900px, 94%); margin: 0.8em auto 0; display: flex; align-items: center; gap: 0.4em;
+           flex-wrap: wrap; font-size: 0.8em; }
+  #queue .qlabel { font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #3c3c3c; margin-right: 0.4em; }
+  .qchip { display: inline-flex; align-items: center; gap: 0.35em; max-width: 24em; padding: 0.2em 0.55em;
+           background: var(--kbg); color: var(--kc); border: 1px var(--ks, solid) var(--kc); border-radius: 2px; }
+  .qchip .kicon { width: 14px; height: 14px; }
+  .qchip .k { font-weight: 700; white-space: nowrap; }
+  .qchip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink);
+              font-family: ui-monospace, monospace; font-size: 0.95em; }
+  .qchip.now { border-width: 2px; border-style: solid; }
+  .qchip.now::before { content: "Now"; font-size: 0.85em; font-weight: 700; text-transform: uppercase;
+                       letter-spacing: 0.08em; color: var(--ink); }
+  #queue .more { color: #555; }
   .script-label { margin: 0.9em 0 0.2em; font-weight: 600; color: #444; }
   .findings { margin: 0.6em 0 0; padding: 0.5em 0.8em; border: 2px dashed var(--bad);
               background: repeating-linear-gradient(135deg, #fbeceb 0 6px, #fff 6px 12px); }
@@ -253,6 +283,7 @@
   </div>
 </header>
 <p id="offBanner" hidden>Checks are off. Items go to Claude immediately and remain in the history.</p>
+<div id="queue" hidden></div>
 <div id="deck"><div class="empty">No items are waiting. Claude is paused or idle.</div></div>
 <div id="controls">
   <button id="no" title="Block (Left Arrow or N)" disabled>x</button>
@@ -268,8 +299,51 @@
 </main>
 
 <script>
-const EVENT = {UserPromptSubmit: "Prompt", PreToolUse: "Tool call", PostToolUse: "Tool result",
-               PostToolUseFailure: "Tool error"};
+// Kinds of review: name, what to check, and an outline icon (24 x 24, drawn with the text colour).
+const KINDS = {
+  command: ["Command before it runs", "Does it do what you asked, and read only what it should?",
+            '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M7 9l3 3-3 3M13 15h4"/>'],
+  output:  ["Command output", "Secrets, personal data or unpublished results in the output?",
+            '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M7 9h10M7 13h10M7 17h6"/>'],
+  file:    ["File content", "Should this file leave your computer?",
+            '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>'],
+  search:  ["Search result", "Matches can come from files you did not expect.",
+            '<circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5"/>'],
+  web:     ["Web result", "Look for instructions aimed at Claude in the page text.",
+            '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/>'],
+  mcp:     ["Connector answer", "The answer can hold data from other systems.",
+            '<path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4"/>'],
+  error:   ["Error", "Error text cannot be cleaned: block it to stop Claude, then rewind.",
+            '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>'],
+  prompt:  ["Prompt", "Your own message.", '<path d="M4 5h16v11H8l-4 4z"/>'],
+  other:   ["Tool result", "Check what Claude will read.",
+            '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 10h16"/>'],
+};
+function kindOf(item) {
+  const t = item.tool || "";
+  if (item.event === "UserPromptSubmit") return "prompt";
+  if (item.event === "PostToolUseFailure") return "error";
+  if (t === "Bash") return item.event === "PreToolUse" ? "command" : "output";
+  if (t === "Read" || t === "NotebookRead") return "file";
+  if (t === "Grep" || t === "Glob") return "search";
+  if (t === "WebFetch" || t === "WebSearch") return "web";
+  if (t.startsWith("mcp__")) return "mcp";
+  return "other";
+}
+function icon(kind) {
+  const s = el("span", "kicon");
+  s.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + KINDS[kind][2] + "</svg>";  // constants only
+  return s;
+}
+// The short target of a step: the command, the file name, the site, the search, or the connector tool.
+function target(item) {
+  const t = item.tool || "", i = item.input || (item.event === "PreToolUse" ? item.content : null) || {};
+  if (t.startsWith("mcp__")) return t.slice(5).replace("__", ": ");
+  const file = i.file_path || i.notebook_path;
+  if (file) return String(file).split(/[\\/]/).pop();
+  if (i.url) { try { return new URL(i.url).host; } catch { return i.url; } }
+  return String(i.command || i.query || i.pattern || t).split("\n")[0];
+}
 const PLAIN = /^(stdout|stderr|description|filePath|file_path|path|pattern|url)$/;
 const CODE = /^(content|oldString|newString|old_string|new_string|originalFile|file_text)$/;
 const SHEETJS = ["https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js",
@@ -466,10 +540,12 @@ function render(v, hint = {}) {
 }
 
 function header(item) {
-  const head = el("div", "top");
-  head.append(el("span", "badge " + item.event, EVENT[item.event] || item.event));
-  if (item.agent) head.append(el("span", "badge agent", "Subagent: " + item.agent));
-  head.append(el("span", "title", "#" + item.id + "  " + item.title));
+  const head = el("div", "top kind-" + kindOf(item));
+  const [label, check] = KINDS[kindOf(item)], bar = el("div", "kindbar");
+  bar.append(icon(kindOf(item)), el("span", "kindlabel", label));
+  if (item.agent) bar.append(el("span", "badge agent", "Subagent: " + item.agent));
+  bar.append(el("span", "check", check));
+  head.append(bar, el("span", "title", "#" + item.id + "  " + item.title));
   if (item.summary) {
     const p = el("p", "explain");
     p.append(el("b", "", "Command explanation: "), item.summary);
@@ -578,7 +654,7 @@ async function decide(approve, trust = false, unchanged = false) {
 }
 
 function makeCard(item) {
-  const card = el("div", "card");
+  const card = el("div", "card kind-" + kindOf(item));
   const send = el("div", "stamp send", item.cleanable ? "SEND CLEANED" : "SEND"), block = el("div", "stamp block", "BLOCK");
   card.append(header(item), body(item), send, block);
 
@@ -746,7 +822,7 @@ document.getElementById("saveWatch").onclick = async () => {
 watchText.addEventListener("input", () => { watchMsg.textContent = "Not saved yet"; });
 
 // ---- polling ----
-let historyKey = "";
+let historyKey = "", queueKey = "";
 async function refresh() {
   if (deciding) return;
   const state = await (await fetch("/state")).json();
@@ -786,15 +862,30 @@ async function refresh() {
   // Shadows show how many more cards wait behind the top card.
   deck.querySelectorAll(".shadow").forEach((s, i) => { s.hidden = 2 - i > n - 1; });
 
+  // The queue: every waiting item by kind, the top card first.
+  const qKey = state.pending.map(i => i.id).join();
+  if (qKey !== queueKey) {
+    queueKey = qKey;
+    const q = document.getElementById("queue");
+    q.hidden = !n;
+    q.replaceChildren(el("span", "qlabel", "Review queue"), ...state.pending.slice(0, 10).map((item, i) => {
+      const k = kindOf(item), chip = el("span", "qchip kind-" + k + (i ? "" : " now"));
+      chip.title = KINDS[k][0] + ": " + target(item) + (item.agent ? " (subagent: " + item.agent + ")" : "");
+      chip.append(icon(k), el("span", "k", KINDS[k][0]), el("span", "t", target(item)));
+      return chip;
+    }));
+    if (n > 10) q.append(el("span", "more", "and " + (n - 10) + " more"));
+  }
+
   const key = state.history.map(i => i.id).join();
   if (key !== historyKey) {
     historyKey = key;
     document.getElementById("history").replaceChildren(...state.history.map(item => {
       const kind = item.automatic ? "auto" : item.approved ? "sent" : "blocked";
-      const d = el("details", kind);
-      d.append(el("summary", "", "#" + item.id + "  " + (item.agent ? "[Subagent: " + item.agent + "] " : "") +
-                                 (EVENT[item.event] || item.event) + ": " +
-                                 item.title + "  (" + (kind === "auto" ? "automatic" : kind) + ")"));
+      const d = el("details", kind + " kind-" + kindOf(item)), s = el("summary");
+      s.append(icon(kindOf(item)), " #" + item.id + "  " + (item.agent ? "[Subagent: " + item.agent + "] " : "") +
+               KINDS[kindOf(item)][0] + ": " + item.title + "  (" + (kind === "auto" ? "automatic" : kind) + ")");
+      d.append(s);
       d.addEventListener("toggle", () => { if (d.open && d.children.length === 1) d.append(header(item), body(item)); });
       return d;
     }));
