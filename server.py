@@ -23,15 +23,21 @@ PORT = 1308  # also in start.py and hooks/hooks.json
 REJECTED = "[withheld: rejected in the approval page]"
 
 # How Claude Code should explain a Bash command. Editable on the page; saved in STYLE_FILE.
+# Language rules after the STE80 style of github.com/Dodaios/ste80-humanizer (MIT):
+# Simplified Technical English (ASD-STE100), applied about 80% strictly.
 DEFAULT_STYLE = (
-    "Up to three plain sentences for a science student who knows the project's folders and files "
-    "but not computer science terms. The main question is which internal data this command would "
-    "send to Claude: name the files and folders it reads by their paths, say what of their content "
-    "will appear in the output that goes to Claude, and warn clearly if that output could contain "
-    "passwords, keys, personal data, unpublished results or other internal information. Then say "
-    "whether anything is sent over the internet (and to which website), deleted or overwritten. "
-    "Avoid jargon such as pipe, stdout, flag, regex, process or shell; if a tool name such as git, "
-    "grep or curl is unavoidable, say in a few words what it is for."
+    "Write for a science student who knows the project's folders and files but not computer "
+    "science terms. Use Simplified Technical English, about 80% strict:\n"
+    "- One idea in each sentence. At most 20 words in a sentence. At most four sentences.\n"
+    "- Active voice and simple tenses. Plain words with one meaning. No phrasal verbs.\n"
+    "- Use one term for one thing. Put a condition first: \"If X, Y\". Put a warning first.\n"
+    "- No jargon such as pipe, stdout, flag, regex, process or shell. If you must name a tool "
+    "such as git, grep or curl, say in a few words what it does.\n"
+    "Give this information, in this order:\n"
+    "1. A warning, if the output that goes to Claude can contain passwords, keys, personal data, "
+    "unpublished results or other internal data.\n"
+    "2. The files and folders that the command reads, by path, and which part of their content goes to Claude.\n"
+    "3. If the command sends data over the internet, the website. If it deletes or overwrites files, which files."
 )
 DATA = Path.home() / ".llm-checker"  # survives plugin updates, which replace the plugin folder
 STYLE_FILE = DATA / "explain-style.txt"
@@ -49,12 +55,11 @@ def style():
 def summary_request(scripts=()):
     """Sent to Claude Code as the reason for holding back a Bash call it has not explained yet."""
     read_first = ("This command runs these script files: " + ", ".join(scripts) + ". Read each of them "
-                  "first and explain what they do as part of the explanation, in particular which files "
-                  "they read, change or delete and what they send to Claude or over the internet. "
-                  ) if scripts else ""
-    return ("Not run yet: the user wants an explanation first. " + read_first + "Call Bash again for this "
-            "step and write the explanation in `description`, following these instructions from the user:"
-            "\n\n" + style())
+                  "first, so your explanation covers what they do. ") if scripts else ""
+    return ("Not run yet: the user wants an explanation first. " + read_first + "Then call Bash again for "
+            "this step with the explanation in `description`. Write it exactly as the user's instructions "
+            "below say: they replace the usual short description and take precedence over any other "
+            "guidance on how to describe a command.\n\nThe user's instructions:\n" + style())
 
 
 SCRIPT_EXT = (".py", ".sh", ".bash", ".zsh", ".r", ".js", ".mjs", ".ts", ".pl", ".rb", ".ps1", ".jl")

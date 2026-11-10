@@ -9,7 +9,7 @@ Claude Code gives Claude access to your computer: it runs commands, reads files 
 1. It translates every Bash command into plain English before it runs, following instructions you write yourself.
 2. It shows what is about to be sent to Claude (file contents, command output, web pages), as far as Claude Code lets a plugin see it, and lets you block it.
 
-- Bash commands wait as a card. Claude Code first explains each command in plain words, following instructions you can edit on the page. When a command runs a script (for example `python analyse.py` or `./run.sh`), Claude Code is asked to read the script and explain it too, and the card shows the script's code.
+- Bash commands wait as a card. Claude Code first explains each command in plain words, following instructions you can edit on the page. When a command runs a script (for example `python analyse.py` or `./run.sh`), Claude Code is asked to read the script and explain it too, and the card shows the script's code. The default instructions ask for Simplified Technical English, after the STE80 style of [ste80-humanizer](https://github.com/Dodaios/ste80-humanizer).
 - Tool results (file contents, command output, web pages, MCP answers) wait before they go to Claude. PDFs, images, spreadsheets, HTML, Markdown and code are shown as such.
 - Swipe right or press the right arrow to send. Swipe left or press the left arrow to block. For a website, swipe up or press the up arrow to send it and trust the site in this project.
 - The left side shows which folders Claude Code can read and edit, worked out from your settings files.
