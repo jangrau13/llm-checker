@@ -21,9 +21,11 @@ RULE = re.compile(r"^([\w-]+)(?:\((.*)\))?$")
 
 
 def project_root(cwd=None):
-    """The git root above cwd, else cwd: where Claude Code looks for .claude/settings*.json."""
+    """The nearest folder above cwd with its own .claude/settings.json or a .git folder, else cwd.
+    A project inside a bigger repository counts as its own project once it has settings."""
     p = Path(cwd or Path.cwd()).resolve()
-    return next((d for d in (p, *p.parents) if (d / ".git").exists()), p)
+    return next((d for d in (p, *p.parents)
+                 if (d / ".git").exists() or (d != HOME and (d / ".claude/settings.json").exists())), p)
 
 
 def posix(p):

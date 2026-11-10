@@ -60,6 +60,13 @@ item, _ = hook_then_decide({**run, "tool_input": {**run["tool_input"], "descript
 assert item["scripts"] == [{"path": str(TMP / "demo.py"), "content": "print(open('data.csv').read())\n"}]
 assert server.scripts_in("ls -la && echo done", str(TMP.parent)) == []
 
+# The explanation request names the project folder and the files the settings protect from reading.
+guarded = TMP / "guarded"
+(guarded / ".claude").mkdir(parents=True, exist_ok=True)
+(guarded / ".claude/settings.json").write_text(json.dumps({"permissions": {"deny": ["Read(./private/**)"]}}))
+asked = reason(post("/hook", {**run, "session_id": "s3", "cwd": str(guarded), "tool_input": {"command": "ls"}}))
+assert f"The project folder is {guarded}" in asked and "./private/**" in asked, asked
+
 # Turned off: steps pass without a card but stay in the history; turned on again, they wait.
 post("/pause", {"paused": True})
 assert post("/hook", ls_explained) == {}

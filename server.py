@@ -52,14 +52,29 @@ def style():
     return STYLE_FILE.read_text(encoding="utf-8").strip() if STYLE_FILE.exists() else DEFAULT_STYLE
 
 
-def summary_request(scripts=()):
+def protected(root):
+    """The Read rules from the settings that block or question reading: what the user does not want read."""
+    seen = []
+    for r in access.rules(Path(root)):
+        if r["tool"] == "Read" and r["kind"] in ("deny", "ask") and r["arg"] and r["arg"] not in seen:
+            seen.append(r["arg"])
+    return seen
+
+
+def summary_request(scripts=(), root=None):
     """Sent to Claude Code as the reason for holding back a Bash call it has not explained yet."""
+    root = root or access.project_root()
     read_first = ("This command runs these script files: " + ", ".join(scripts) + ". Read each of them "
                   "first, so your explanation covers what they do. ") if scripts else ""
+    blocked = protected(root)
+    boundary = (f"\n\nThe project folder is {root}. The user does not want files outside it read, nor these "
+                "files and folders (patterns from the settings' Read rules, relative to the project folder "
+                "unless they start with ~/ or //): " + (", ".join(blocked) or "none") + ". If the command, or a "
+                "script it runs, reads any of them, start the explanation with a clear warning that names them.")
     return ("Not run yet: the user wants an explanation first. " + read_first + "Then call Bash again for "
             "this step with the explanation in `description`. Write it exactly as the user's instructions "
             "below say: they replace the usual short description and take precedence over any other "
-            "guidance on how to describe a command.\n\nThe user's instructions:\n" + style())
+            "guidance on how to describe a command." + boundary + "\n\nThe user's instructions:\n" + style())
 
 
 SCRIPT_EXT = (".py", ".sh", ".bash", ".zsh", ".r", ".js", ".mjs", ".ts", ".pl", ".rb", ".ps1", ".jl")
@@ -203,7 +218,7 @@ def handle_hook(hook):
         if bash:
             explained.discard(key)  # the retry is gated once; the session's next Bash call asks again
     scripts = scripts_in((hook.get("tool_input") or {}).get("command"), hook.get("cwd")) if bash else []
-    request = summary_request(scripts) if ask_summary else None
+    request = summary_request(scripts, root) if ask_summary else None
     title, content = view(hook, request)
     item = {"id": next(ids), "event": event, "title": title, "content": content,
             "session": hook.get("session_id"), "tool": tool, "input": hook.get("tool_input")}
