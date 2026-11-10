@@ -149,8 +149,6 @@
   .figures { min-width: 0; overflow: hidden; }
   .figures div { white-space: nowrap; }
   .monitor { flex: none; white-space: nowrap; }
-  @media (max-width: 1279px) { .product .sub { display: none; } header.topbar { gap: 1em; } }
-  @media (max-width: 999px) { header.topbar { flex-wrap: wrap; position: static; } .figures { order: 3; flex-basis: 100%; } }
   .monogram { width: 34px; height: 34px; display: grid; place-items: center; background: var(--brand); color: #fff;
               font-weight: 700; font-size: 0.85em; letter-spacing: 0.04em; border-radius: 2px; }
   .product h1 { margin: 0; font-size: 1.05em; font-weight: 700; color: var(--ink); line-height: 1.2; }
@@ -249,6 +247,23 @@
   #styleText { border-radius: 2px; } #styleText:focus { outline-color: var(--brand); }
   .pill { border-radius: 2px; }
   .term { border-radius: 2px; }
+
+  /* ---- responsive header; keep this block last, so it overrides the base header rules ---- */
+  @media (max-width: 1279px) {
+    .product .sub { display: none; }
+    header.topbar { gap: 1em; }
+    .figures div { padding: 0 0.7em; }
+  }
+  @media (max-width: 999px) {
+    header.topbar { flex-wrap: wrap; row-gap: 0.5em; position: static; }
+    .monitor { margin-left: auto; }
+    .figures { order: 3; flex: 0 0 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+               border-top: 1px solid var(--line); padding-top: 0.45em; overflow: visible; }
+    .figures div:first-child { border-left: none; padding-left: 0; }
+  }
+  @media (max-width: 599px) {
+    .monitor { margin-left: 0; flex-wrap: wrap; white-space: normal; }
+  }
 </style>
 
 <header class="topbar">
