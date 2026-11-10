@@ -41,7 +41,16 @@ ls_explained = {**ls, "tool_input": {"command": "ls", "description": "Lists the 
 reason = lambda out: out["hookSpecificOutput"]["permissionDecisionReason"]
 
 # By default commands run without a card or an explanation; only their output waits.
-assert post("/hook", ls) == {}
+# Every command that runs prints its exit code on failure, so the failure arrives as a cleanable result.
+wrapped = lambda cmd: {"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                              "updatedInput": {"command": cmd + server.EXIT_SUFFIX["Bash"]}}}
+assert post("/hook", ls) == wrapped("ls")
+assert post("/hook", {**ls, "tool_input": {"command": "sleep 9", "run_in_background": True}}) == {}
+import subprocess
+
+for cmd, failed in (("ls /no-such-folder", True), ("echo ok", False)):
+    r = subprocess.run(["bash", "-c", cmd + server.EXIT_SUFFIX["Bash"]], capture_output=True, text=True)
+    assert r.returncode == 0 and ("Exit code" in r.stdout) == failed, r
 assert post("/bash-before", {"on": True})["bash_before"]  # "Cautiousness high", for the tests below
 
 # Pre-step: the first call goes straight back to Claude Code with the request to explain it.
@@ -50,7 +59,8 @@ assert reason(post("/hook", ls)) == server.summary_request()
 # approving lets the normal permission flow run.
 changed = {**ls, "tool_input": {"command": "ls -la", "description": "Lists the files in this folder."}}
 item, out = hook_then_decide(changed, True)
-assert item["summary"] == "Lists the files in this folder." and item["content"]["command"] == "ls -la" and out == {}
+assert item["summary"] == "Lists the files in this folder." and item["content"]["command"] == "ls -la"
+assert out["hookSpecificOutput"]["updatedInput"]["command"] == "ls -la" + server.EXIT_SUFFIX["Bash"], out
 assert opened, "a waiting card opens the page when none is open"
 
 # A command that runs a script: Claude Code is asked to read and explain the script too,
@@ -99,7 +109,7 @@ assert len(waiting) == 1, waiting
 post("/decide", {"id": waiting[0]["id"], "approve": True})
 for t in threads:
     t.join(2)
-assert outs == [{}, {}], outs
+assert outs[0] == outs[1] and "updatedInput" in outs[0]["hookSpecificOutput"], outs
 assert post("/hook", {"hook_event_name": "PreToolUse", "tool_name": "ToolSearch", "tool_input": {}}) == {}
 # The next identical call asks for an explanation again, in the style saved on the page.
 server.STYLE_FILE = TMP / "explain-style-test.txt"

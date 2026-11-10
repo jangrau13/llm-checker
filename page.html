@@ -630,7 +630,9 @@ function terminal(item) {
   const failed = item.event === "PostToolUseFailure";
   if (failed) chips.push(["failed", "bad"]);
   else if (!pre) {
+    const exit = /(?:^|\n)Exit code (\d+)\s*$/.exec(out.stdout || "");  // added by LLM Checker to failing commands
     if (out.interrupted) chips.push(["interrupted", "bad"]);
+    else if (exit) chips.push(["failed with exit code " + exit[1], "bad"]);
     else chips.push([out.stderr ? "finished with error output" : "finished", out.stderr ? "bad" : "good"]);
   }
   for (const [text, cls] of chips) bar.append(el("span", "chip " + cls, text));

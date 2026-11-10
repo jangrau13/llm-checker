@@ -177,6 +177,29 @@ def protected(root):
     return seen
 
 
+# Added to every Bash and PowerShell command that runs: a failing command then ends normally and prints its
+# exit code, so its output arrives as a result the page can clean or block. Claude Code offers no way to
+# replace error text.
+EXIT_SUFFIX = {
+    "Bash": '\n__lc=$?; [ "$__lc" -eq 0 ] || echo "Exit code $__lc"',
+    # $? is false after a failed cmdlet or a native program with a nonzero exit code
+    "PowerShell": '\n$__lc = $?; if (-not $__lc) { "Exit code $(if ($LASTEXITCODE) { $LASTEXITCODE } else { 1 })" }',
+}
+
+
+def shell_runs(hook):
+    """The answer that lets a Bash or PowerShell call run, with its EXIT_SUFFIX added. Approve = no permission
+    decision, so the normal permission flow still applies to the changed command."""
+    i = hook.get("tool_input") or {}
+    suffix = EXIT_SUFFIX.get(hook.get("tool_name"))
+    if not suffix or i.get("run_in_background") or not str(i.get("command") or "").strip():
+        return {}  # background output goes to a file, not into this result
+    # ponytail: a command ending in a line continuation (\ or `), calling exit, or stopping on a terminating
+    # PowerShell error still fails as an error
+    return {"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                   "updatedInput": {**i, "command": i["command"] + suffix}}}
+
+
 def summary_request(scripts=(), root=None):
     """Sent to Claude Code as the reason for holding back a Bash call it has not explained yet."""
     root = root or access.project_root()
@@ -334,8 +357,10 @@ def handle_hook(hook):
                                "title": f"{view(hook)[0]} (checker off)", "approved": True,
                                "automatic": True})
         return {}
-    if not bash_before[0] and (event == "PreToolUse" and tool == "Bash" or tool in WEB):
-        return {}  # the command runs (its output still waits on the page); web results go straight to Claude
+    bash = event == "PreToolUse" and tool == "Bash"
+    if not bash_before[0] and (bash or tool in WEB):
+        # the command runs (its output still waits on the page); web results go straight to Claude
+        return shell_runs(hook) if bash else {}
     url = (hook.get("tool_input") or {}).get("url")
     if tool == "WebFetch" and access.trusted(root, url):
         with lock:  # a site trusted for this project: logged, no click needed
@@ -343,7 +368,6 @@ def handle_hook(hook):
                                "title": f"Sent automatically because {access.host(url)} is trusted for this project",
                                "content": hook.get("tool_input"), "approved": True, "automatic": True})
         return {}
-    bash = event == "PreToolUse" and tool == "Bash"
     # Keyed by session, not by command: Claude often adjusts the command when it retries.
     # The card shows the command that will really run, so the change cannot slip past.
     key = (hook.get("session_id"), hook.get("agent_id"))  # a subagent's Bash calls are explained on their own
@@ -384,6 +408,8 @@ def handle_hook(hook):
         pending[item["id"]] = entry
     ensure_page_open()
     entry["event"].wait()  # blocks the hook, and with it Claude, until a decision
+    if event == "PreToolUse" and tool in EXIT_SUFFIX and entry["approve"]:
+        return shell_runs(hook)
     return answer(hook, entry["approve"], clean=entry["clean"])
 
 
