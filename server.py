@@ -158,8 +158,10 @@ def scrub(value, key=None):
 
 PRIVATE = (".llm-checker",)  # tool calls that mention the checker's own data folder are refused
 
-FAILURE_STOP = "You blocked a tool error. Rewind past this step before sending another message."
-FAILURE_NOTE = "Claude has not read this error. Block it, then rewind past this step before sending another message."
+FAILURE_STOP = "You blocked a tool error. Claude still has its text: rewind past this step before sending another message."
+FAILURE_NOTE = ("Claude Code cannot hold back or clean an error: Claude receives this text whatever you choose. "
+                "Block tells Claude to ignore it and stop. Rewind past this step to remove it.")
+FAILURE_REASON = "The user blocked this error in LLM Checker. Do not use or repeat its content. Stop and wait for the user."
 
 
 def style():
@@ -307,8 +309,9 @@ def answer(hook, approve, request=None, clean=False):
             "updatedToolOutput": redact(hook.get("tool_response")),
         }}
     if event == "PostToolUseFailure":
-        # Claude Code offers no way to replace error text, so blocking stops Claude before its next request.
-        return {"continue": False, "stopReason": FAILURE_STOP}
+        # Claude Code offers no way to replace or withhold error text, and ignores "continue" for this event,
+        # so the error always reaches Claude; "block" adds a reason telling Claude to ignore it.
+        return {"decision": "block", "reason": FAILURE_REASON, "continue": False, "stopReason": FAILURE_STOP}
     return {"decision": "block", "reason": "The user blocked this item in LLM Checker."}
 
 

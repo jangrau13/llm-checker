@@ -232,6 +232,7 @@
                             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12); background: #fff; font-size: 1.6em !important; }
   #controls button:hover:not(:disabled) { border-color: var(--brand); }
   #no { color: var(--bad); } #yes { color: var(--ok); } #star { color: var(--brand); }
+  #controls #yes.wide { width: auto !important; padding: 0 1em; font-size: 0.95em !important; font-weight: 600; }
   #controls #raw { width: auto !important; height: 40px !important; align-self: center; padding: 0 1.2em;
                    font-size: 0.85em !important; white-space: nowrap; border: 1px dashed var(--bad);
                    color: var(--bad); }
@@ -329,7 +330,7 @@
 </div>
 <p class="hint">Send: swipe right, or press Right Arrow, Enter or Y. Block: swipe left, or press Left Arrow or N.
   Send a website result and trust the site for this project: swipe up, or press Up Arrow or T.
-  Send the original with all findings: press O.</p>
+  Send the original with all findings, or an error: press O.</p>
 <h2 class="section">History</h2>
 <div id="history"></div>
 </main>
@@ -350,7 +351,7 @@ const KINDS = {
             '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/>'],
   mcp:     ["Connector answer", "The answer can hold data from other systems.",
             '<path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4"/>'],
-  error:   ["Error", "Error text cannot be cleaned: block it to stop Claude, then rewind.",
+  error:   ["Error", "Claude receives error text whatever you choose: block it, then rewind.",
             '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>'],
   prompt:  ["Prompt", "Your own message.", '<path d="M4 5h16v11H8l-4 4z"/>'],
   other:   ["Tool result", "Check what Claude will read.",
@@ -608,7 +609,7 @@ function header(item) {
     }
     box.append(ul, el("p", "", item.cleanable
       ? "Send removes the listed text. Send original keeps it."
-      : "Block this error and rewind past this step to keep it from Claude."));
+      : "Claude receives this error whatever you choose. Block it, then rewind past this step to remove it."));
     head.append(box);
   }
   return head;
@@ -681,9 +682,12 @@ const deck = document.getElementById("deck");
 const yes = document.getElementById("yes"), no = document.getElementById("no");
 let current = null, deciding = false;
 
+const isError = item => !!item && item.event === "PostToolUseFailure";
 // With findings, sending means sending the cleaned version; only "Send original" keeps the findings.
+// An error cannot be cleaned, so it is sent only through "Send original".
 async function decide(approve, trust = false, unchanged = false) {
   if (!current || deciding || (trust && !current.site) || !deck.querySelector(".card")) return;
+  if (approve && !unchanged && isError(current)) return;
   deciding = true;
   const clean = approve && !unchanged && !!current.cleanable;
   const card = deck.querySelector(".card");
@@ -714,7 +718,7 @@ function makeCard(item) {
     dy = item.site ? Math.min(0, e.clientY - startY) : 0;  // upward drag only matters for websites
     card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 20}deg)`;
     const up = -dy > Math.abs(dx);
-    send.style.opacity = up ? 0 : Math.max(0, dx / 120);
+    send.style.opacity = up || isError(item) ? 0 : Math.max(0, dx / 120);
     block.style.opacity = up ? 0 : Math.max(0, -dx / 120);
     trustStamp.style.opacity = up ? -dy / 120 : 0;
   });
@@ -723,7 +727,7 @@ function makeCard(item) {
     startX = null;
     card.classList.remove("dragging");
     if (-dy > 120 && -dy > Math.abs(dx)) return decide(true, true);
-    if (Math.abs(dx) > 120) return decide(dx > 0);
+    if (dx < -120 || dx > 120 && !isError(item)) return decide(dx > 0);  // errors do not send on a swipe
     card.style.transform = "";
     send.style.opacity = block.style.opacity = trustStamp.style.opacity = 0;
   };
@@ -884,8 +888,13 @@ async function refresh() {
   star.title = next && next.site ? "Send and trust " + next.site + " for this project (Up Arrow key)"
                                  : "Trust this website";
   yes.disabled = no.disabled = !next;
-  raw.hidden = !(next && next.cleanable);
-  yes.title = next && next.cleanable ? "Remove findings and send (Right Arrow key)" : "Send (Right Arrow key)";
+  const cleanable = !!(next && next.cleanable);
+  yes.hidden = isError(next);
+  yes.textContent = cleanable ? "✂ Send cleaned" : "✓";
+  yes.classList.toggle("wide", cleanable);
+  yes.title = cleanable ? "Remove findings and send (Right Arrow key)" : "Send (Right Arrow key)";
+  raw.hidden = !(cleanable || isError(next));
+  raw.title = isError(next) ? "Send the error unchanged (O)" : "Send the original result with all findings (O)";
 
   if ((next && next.id) !== (current && current.id)) {  // re-render only when the top card changes
     current = next;
