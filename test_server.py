@@ -113,7 +113,14 @@ assert reason(out) != server.summary_request()
 assert post("/hook", {"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {}}) == {}
 assert post("/hook", {"hook_event_name": "PostToolUse", "tool_name": "Edit", "tool_response": {}}) == {}
 assert post("/hook", {"hook_event_name": "PreToolUse", "tool_name": "mcp__docs__search", "tool_input": {}}) == {}
-assert b"LLM Checker" in urllib.request.urlopen(base + "/").read()
+page = urllib.request.urlopen(base + "/").read().decode()
+assert "LLM Checker" in page
+# Two page functions with the same name: the later silently replaces the earlier and breaks every card.
+import collections
+import re
+
+names = collections.Counter(re.findall(r"^\s*(?:async\s+)?function\s+(\w+)", page, re.M))
+assert not [n for n, c in names.items() if c > 1], names
 
 # Access sidebar and trusted sites, on a throwaway project in tmp/.
 import shutil

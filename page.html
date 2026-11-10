@@ -17,12 +17,26 @@
   /* Readable in greyscale: every state also has a symbol, a word or a line style, never colour alone.
      The three state colours differ in lightness too (dark, light, mid). */
   :root { --brand: #1f3a5f; --accent: #1f3a5f; --bg: #fff; --ink: #222; --line: #d6d6d6;
-          --ok: #1d5c34; --warn: #f0c36a; --bad: #b3261e; --side: 330px; }
+          --ok: #1d5c34; --warn: #f0c36a; --bad: #b3261e; --head: 60px; --content: 980px; }
   body { font: 15px "Open Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif; margin: 0;
          background: var(--bg); color: var(--ink); }
-  main { margin: 0 var(--side); }
-  #style { position: fixed; inset: 0 0 0 auto; width: var(--side); overflow: auto; background: #fff;
-           border-left: 1px solid #e1e4e8; padding: 0.8em 0.9em 2em; font-size: 0.88em;
+  /* ---- layout: header across the top; access, review and settings as columns below ----
+     Wide desktops: three columns. Laptops: review plus a single side column. Narrow windows: stacked. */
+  .layout { display: grid; grid-template-columns: 290px minmax(0, 1fr) 320px;
+            grid-template-areas: "access main style"; align-items: start; }
+  #access { grid-area: access; } #style { grid-area: style; }
+  main { grid-area: main; min-width: 0; padding: 0 1.6em 2em; }
+  #access, #style { position: sticky; top: var(--head); height: calc(100vh - var(--head)); overflow: auto; }
+  @media (max-width: 1439px) {
+    .layout { grid-template-columns: minmax(0, 1fr) 320px; grid-template-areas: "main access" "main style"; }
+    #access, #style { position: static; height: auto; border-right: none !important; border-left: 1px solid var(--line); }
+  }
+  @media (max-width: 999px) {
+    .layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "access" "style"; }
+    #access, #style { border: none !important; border-top: 1px solid var(--line) !important; }
+    main { padding: 0 0.8em 1.5em; }
+  }
+  #style { background: #fff; border-left: 1px solid #e1e4e8; padding: 0.8em 0.9em 2em; font-size: 0.88em;
            display: flex; flex-direction: column; }
   #style h2 { font-size: 1.1em; margin: 0.2em 0 0.4em; color: var(--brand); }
   #style .note { color: #777; }
@@ -32,9 +46,8 @@
   .row-buttons { display: flex; gap: 0.5em; align-items: center; margin-top: 0.6em; }
   .row-buttons button { border: none; border-radius: 6px; padding: 0.45em 1em; cursor: pointer; font: inherit; }
   #saveStyle { background: var(--brand); color: #fff; } #resetStyle { background: #eceef1; }
-  h2.section { width: min(900px, 94%); margin: 1.5em auto 0; font-size: 1.1em; color: var(--brand); }
-  #access { position: fixed; inset: 0 auto 0 0; width: var(--side); overflow: auto; background: #fff;
-            border-right: 1px solid #e1e4e8; padding: 0.8em 0.9em 2em; font-size: 0.88em; }
+  h2.section { max-width: var(--content); margin: 1.5em auto 0; font-size: 1.1em; color: var(--brand); }
+  #access { background: #fff; border-right: 1px solid #e1e4e8; padding: 0.8em 0.9em 2em; font-size: 0.88em; }
   #access h2 { font-size: 1.1em; margin: 0.2em 0 0.4em; color: var(--brand); }
   #access h3 { font-size: 0.95em; margin: 1.2em 0 0.3em; color: var(--brand); }
   #access .legend { line-height: 2; color: #555; margin: 0 0 0.6em; }
@@ -55,8 +68,8 @@
   #access ul { margin: 0; padding-left: 1.1em; } #access li { margin: 0.15em 0; word-break: break-all; }
   .warn-box { background: #fbe4e6; border-left: 4px solid var(--bad); padding: 0.4em 0.6em; border-radius: 4px; }
   #star { color: var(--accent); font-size: 1.5em !important; width: 52px !important; height: 52px !important; align-self: center; }
-  @media (max-width: 1200px) { main { margin: 0; } #access, #style { position: static; width: auto; border: none; } }
-  #deck { position: relative; width: min(900px, 94%); height: calc(100vh - 265px); min-height: 360px; margin: 0.6em auto 0; }
+  #deck { position: relative; max-width: var(--content); height: clamp(380px, calc(100vh - var(--head) - 215px), 1000px);
+          margin: 0.6em auto 0; }
   .card, .shadow { position: absolute; inset: 0; border-radius: 18px; background: #fff;
                    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12); }
   .shadow { transform: translateY(var(--y)) scale(var(--s)); opacity: 0.6; }
@@ -122,7 +135,7 @@
   .term .prompt { color: #5fd38d; user-select: none; }
   .term .stderr pre { color: #ff8b8b; }
   .term .none { color: #777; font-style: italic; }
-  #history { width: min(900px, 94%); margin: 1em auto 3em; }
+  #history { max-width: var(--content); margin: 1em auto 3em; }
   #history > details { background: #fff; border-radius: 10px; padding: 0.5em 0.8em; margin: 0.4em 0;
                        border-left: 6px solid var(--c); }
   .sent { --c: #1a9c4a; } .blocked { --c: #d23; } .auto { --c: #aaa; }
@@ -130,8 +143,14 @@
   /* ---- theme: flat tiles, uppercase section labels ---- */
   /* ---- audit header: product, figures, monitored project, monitoring state ---- */
   header.topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 1.6em;
-                  padding: 0.65em 1.2em; background: #fff; border-bottom: 2px solid var(--brand); }
-  .product { display: flex; align-items: center; gap: 0.65em; }
+                  min-height: var(--head); padding: 0.5em 1.2em; background: #fff; border-bottom: 2px solid var(--brand); }
+  .product { display: flex; align-items: center; gap: 0.65em; flex: none; }
+  .product h1, .product .sub { white-space: nowrap; }
+  .figures { min-width: 0; overflow: hidden; }
+  .figures div { white-space: nowrap; }
+  .monitor { flex: none; white-space: nowrap; }
+  @media (max-width: 1279px) { .product .sub { display: none; } header.topbar { gap: 1em; } }
+  @media (max-width: 999px) { header.topbar { flex-wrap: wrap; position: static; } .figures { order: 3; flex-basis: 100%; } }
   .monogram { width: 34px; height: 34px; display: grid; place-items: center; background: var(--brand); color: #fff;
               font-weight: 700; font-size: 0.85em; letter-spacing: 0.04em; border-radius: 2px; }
   .product h1 { margin: 0; font-size: 1.05em; font-weight: 700; color: var(--ink); line-height: 1.2; }
@@ -154,7 +173,7 @@
   #bashBefore { width: 1.05em; height: 1.05em; accent-color: var(--brand); cursor: pointer; }
   #offBanner { margin: 0; padding: 0.5em 1.2em; font-weight: 600; border-bottom: 2px dashed var(--bad);
                background: repeating-linear-gradient(135deg, #f6e3e1 0 6px, #fff 6px 12px); }
-  @media (max-width: 1500px) { .figures .project { display: none; } }
+  @media (max-width: 1599px) { .figures .project { display: none; } }
   #access h2, #style h2, h2.section { font-size: 0.85em; font-weight: 700; text-transform: uppercase;
                                       letter-spacing: 0.08em; color: #3c3c3c; border-bottom: 2px solid var(--brand);
                                       padding-bottom: 0.3em; }
@@ -186,7 +205,7 @@
   #access .kicon { width: 16px; height: 16px; color: #555; }
   .kindlabel { font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
   .kindbar .check { margin-left: auto; font-size: 0.85em; color: #3c3c3c; text-align: right; }
-  #queue { width: min(900px, 94%); margin: 0.8em auto 0; display: flex; align-items: center; gap: 0.4em;
+  #queue { max-width: var(--content); margin: 0.8em auto 0; display: flex; align-items: center; gap: 0.4em;
            flex-wrap: wrap; font-size: 0.8em; }
   #queue .qlabel { font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #3c3c3c; margin-right: 0.4em; }
   .qchip { display: inline-flex; align-items: center; gap: 0.35em; max-width: 24em; padding: 0.2em 0.55em;
@@ -232,6 +251,27 @@
   .term { border-radius: 2px; }
 </style>
 
+<header class="topbar">
+  <div class="product">
+    <div class="monogram" aria-hidden="true">LC</div>
+    <div><h1>LLM Checker</h1><div class="sub">Review data before Claude receives it</div></div>
+  </div>
+  <dl class="figures">
+    <div><dt>Waiting</dt><dd id="count">0</dd></div>
+    <div><dt>Sent</dt><dd id="statSent">0</dd></div>
+    <div><dt>Blocked</dt><dd id="statBlocked">0</dd></div>
+    <div title="Passed without a card: checks off, or a trusted site"><dt>Automatic</dt><dd id="statAuto">0</dd></div>
+    <div class="project"><dt>Project</dt><dd id="statProject" class="path">...</dd></div>
+  </dl>
+  <div class="monitor">
+    <label id="cautionLabel" title="Explain and hold each Bash command before it runs, and hold web search and web fetch results">
+      <input type="checkbox" id="bashBefore"> Cautiousness high</label>
+    <span id="statusLabel">Monitoring on</span>
+    <button id="power" title="Stop or resume checks">Turn off</button>
+  </div>
+</header>
+<p id="offBanner" hidden>Checks are off. Items go to Claude immediately and remain in the history.</p>
+<div class="layout">
 <aside id="access">
   <h2>Claude Code access</h2>
   <p class="legend"><span class="pill allow">✓ read</span> allowed<br>
@@ -264,26 +304,6 @@
   <p class="detectors" id="detectors"></p>
 </aside>
 <main>
-<header class="topbar">
-  <div class="product">
-    <div class="monogram" aria-hidden="true">LC</div>
-    <div><h1>LLM Checker</h1><div class="sub">Review data before Claude receives it</div></div>
-  </div>
-  <dl class="figures">
-    <div><dt>Waiting</dt><dd id="count">0</dd></div>
-    <div><dt>Sent</dt><dd id="statSent">0</dd></div>
-    <div><dt>Blocked</dt><dd id="statBlocked">0</dd></div>
-    <div><dt>Passed automatically</dt><dd id="statAuto">0</dd></div>
-    <div class="project"><dt>Project</dt><dd id="statProject" class="path">...</dd></div>
-  </dl>
-  <div class="monitor">
-    <label id="cautionLabel" title="Explain and hold each Bash command before it runs, and hold web search and web fetch results">
-      <input type="checkbox" id="bashBefore"> Cautiousness high</label>
-    <span id="statusLabel">Monitoring on</span>
-    <button id="power" title="Stop or resume checks">Turn off</button>
-  </div>
-</header>
-<p id="offBanner" hidden>Checks are off. Items go to Claude immediately and remain in the history.</p>
 <div id="queue" hidden></div>
 <div id="deck"><div class="empty">No items are waiting. Claude is paused or idle.</div></div>
 <div id="controls">
@@ -298,6 +318,7 @@
 <h2 class="section">History</h2>
 <div id="history"></div>
 </main>
+</div>
 
 <script>
 // Kinds of review: name, what to check, and an outline icon (24 x 24, drawn with the text colour).
@@ -320,7 +341,7 @@ const KINDS = {
   other:   ["Tool result", "Check what Claude will read.",
             '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 10h16"/>'],
 };
-function kindOf(item) {
+function reviewKind(item) {  // not kindOf: that name detects file formats further down
   const t = item.tool || "";
   if (item.event === "UserPromptSubmit") return "prompt";
   if (item.event === "PostToolUseFailure") return "error";
@@ -544,9 +565,9 @@ function render(v, hint = {}) {
 }
 
 function header(item) {
-  const head = el("div", "top kind-" + kindOf(item));
-  const [label, check] = KINDS[kindOf(item)], bar = el("div", "kindbar");
-  bar.append(icon(kindOf(item)), el("span", "kindlabel", label));
+  const k = reviewKind(item), head = el("div", "top kind-" + k);
+  const [label, check] = KINDS[k], bar = el("div", "kindbar");
+  bar.append(icon(k), el("span", "kindlabel", label));
   if (item.agent) bar.append(el("span", "badge agent", "Subagent: " + item.agent));
   bar.append(el("span", "check", check));
   head.append(bar, el("span", "title", "#" + item.id + "  " + item.title));
@@ -647,7 +668,7 @@ let current = null, deciding = false;
 
 // With findings, sending means sending the cleaned version; only "Send original" keeps the findings.
 async function decide(approve, trust = false, unchanged = false) {
-  if (!current || deciding || (trust && !current.site)) return;
+  if (!current || deciding || (trust && !current.site) || !deck.querySelector(".card")) return;
   deciding = true;
   const clean = approve && !unchanged && !!current.cleanable;
   const card = deck.querySelector(".card");
@@ -658,7 +679,7 @@ async function decide(approve, trust = false, unchanged = false) {
 }
 
 function makeCard(item) {
-  const card = el("div", "card kind-" + kindOf(item));
+  const card = el("div", "card kind-" + reviewKind(item));
   const send = el("div", "stamp send", item.cleanable ? "SEND CLEANED" : "SEND"), block = el("div", "stamp block", "BLOCK");
   card.append(header(item), body(item), send, block);
 
@@ -875,7 +896,7 @@ async function refresh() {
     const q = document.getElementById("queue");
     q.hidden = !n;
     q.replaceChildren(el("span", "qlabel", "Review queue"), ...state.pending.slice(0, 10).map((item, i) => {
-      const k = kindOf(item), chip = el("span", "qchip kind-" + k + (i ? "" : " now"));
+      const k = reviewKind(item), chip = el("span", "qchip kind-" + k + (i ? "" : " now"));
       chip.title = KINDS[k][0] + ": " + target(item) + (item.agent ? " (subagent: " + item.agent + ")" : "");
       chip.append(icon(k), el("span", "k", KINDS[k][0]), el("span", "t", target(item)));
       return chip;
@@ -888,9 +909,9 @@ async function refresh() {
     historyKey = key;
     document.getElementById("history").replaceChildren(...state.history.map(item => {
       const kind = item.automatic ? "auto" : item.approved ? "sent" : "blocked";
-      const d = el("details", kind + " kind-" + kindOf(item)), s = el("summary");
-      s.append(icon(kindOf(item)), " #" + item.id + "  " + (item.agent ? "[Subagent: " + item.agent + "] " : "") +
-               KINDS[kindOf(item)][0] + ": " + item.title + "  (" + (kind === "auto" ? "automatic" : kind) + ")");
+      const k = reviewKind(item), d = el("details", kind + " kind-" + k), s = el("summary");
+      s.append(icon(k), " #" + item.id + "  " + (item.agent ? "[Subagent: " + item.agent + "] " : "") +
+               KINDS[k][0] + ": " + item.title + "  (" + (kind === "auto" ? "automatic" : kind) + ")");
       d.append(s);
       d.addEventListener("toggle", () => { if (d.open && d.children.length === 1) d.append(header(item), body(item)); });
       return d;
