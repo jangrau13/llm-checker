@@ -11,6 +11,7 @@ and opens the page. The tool hooks are HTTP hooks, so they need no shell or curl
 import itertools
 import json
 import re
+import secrets
 import shlex
 import threading
 import time
@@ -41,6 +42,9 @@ DEFAULT_STYLE = (
 )
 DATA = Path.home() / ".llm-checker"  # survives plugin updates, which replace the plugin folder
 STYLE_FILE = DATA / "explain-style.txt"
+TOKEN_FILE = DATA / "server.token"  # lets start.py stop this server when a newer version starts
+TOKEN = secrets.token_hex(16)
+VERSION = json.loads((Path(__file__).parent / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))["version"]
 WATCH_FILE = DATA / "watchlist.txt"  # the user's private terms; never part of any answer to Claude
 
 # Built-in detectors for data that should rarely reach Claude. Tuned to catch, not to be exact:
@@ -404,6 +408,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send(200, {"pending": [p["item"] for p in pending.values()], "history": history[:50],
                                 "paused": paused[0], "bash_before": bash_before[0],
                                 "totals": {"sent": sent, "blocked": len(history) - sent - auto, "auto": auto}})
+        elif self.path == "/version":
+            self.send(200, {"version": VERSION})
         elif self.path == "/access":
             self.send(200, access.access(last_root[0]))
         elif self.path == "/style":
@@ -462,6 +468,12 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/pause":
             paused[0] = bool(self.read_json().get("paused"))  # cards already waiting keep waiting
             self.send(200, {"paused": paused[0]})
+        elif self.path == "/quit":
+            # A newer version takes over the port: start.py proves it may stop this server with the token.
+            ok = secrets.compare_digest(str(self.read_json().get("token", "")), TOKEN)
+            self.send(200 if ok else 403, {})
+            if ok:
+                threading.Thread(target=self.server.shutdown).start()
         elif self.path == "/style":
             text = str(self.read_json().get("style", "")).strip()
             STYLE_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -477,5 +489,9 @@ class Handler(BaseHTTPRequestHandler):
 PAGE = Path(__file__).with_name("page.html")  # read on every request, so page edits need no restart
 
 if __name__ == "__main__":
-    print(f"LLM Checker: http://127.0.0.1:{PORT}")
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    print(f"LLM Checker {VERSION}: http://127.0.0.1:{PORT}")
+    TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TOKEN_FILE.write_text(TOKEN, encoding="utf-8")  # for start.py; Claude is denied this folder
+    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    srv.serve_forever()
+    srv.server_close()

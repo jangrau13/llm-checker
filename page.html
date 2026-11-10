@@ -183,6 +183,7 @@
              background: var(--kbg); color: var(--kc); border-bottom: 1px solid var(--line); }
   .card .kindbar { margin: -1em -1.2em 0.7em; }
   #history summary .kicon { color: var(--kc); }
+  #access .kicon { width: 16px; height: 16px; color: #555; }
   .kindlabel { font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
   .kindbar .check { margin-left: auto; font-size: 0.85em; color: #3c3c3c; text-align: right; }
   #queue { width: min(900px, 94%); margin: 0.8em auto 0; display: flex; align-items: center; gap: 0.4em;
@@ -233,8 +234,8 @@
 
 <aside id="access">
   <h2>Claude Code access</h2>
-  <p class="legend"><span class="pill allow">+ read</span> allowed<br>
-    <span class="pill ask">? edit</span> requires approval<br><span class="pill deny">x read</span> blocked</p>
+  <p class="legend"><span class="pill allow">✓ read</span> allowed<br>
+    <span class="pill ask">? edit</span> requires approval<br><span class="pill deny">✕ read</span> blocked</p>
   <div id="tree">Loading access rules...</div>
   <h3>Outside the project</h3><div id="outside"></div>
   <h3>Websites</h3><div id="sites"></div>
@@ -330,11 +331,14 @@ function kindOf(item) {
   if (t.startsWith("mcp__")) return "mcp";
   return "other";
 }
-function icon(kind) {
+const FOLDER = '<path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>';
+const FILE = '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/>';
+function svgIcon(paths) {
   const s = el("span", "kicon");
-  s.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + KINDS[kind][2] + "</svg>";  // constants only
+  s.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths + "</svg>";  // constants only
   return s;
 }
+const icon = kind => svgIcon(KINDS[kind][2]);
 // The short target of a step: the command, the file name, the site, the search, or the connector tool.
 function target(item) {
   const t = item.tool || "", i = item.input || (item.event === "PreToolUse" ? item.content : null) || {};
@@ -721,12 +725,14 @@ document.addEventListener("keydown", e => {
 
 // ---- sidebar: what Claude can reach ----
 function pill(kind, label, why) {
-  const p = el("span", "pill " + kind, {allow: "+ ", ask: "? ", deny: "x "}[kind] + label);
+  const p = el("span", "pill " + kind, {allow: "✓ ", ask: "? ", deny: "✕ "}[kind] + label);
   p.title = label + ": " + {allow: "allowed", ask: "requires approval", deny: "blocked"}[kind] + "\n" + why;
   return p;
 }
 function treeNode(n, depth) {
-  const row = [el("span", "", n.dir ? "[D]" : "[F]"), el("span", "name", n.name),
+  const glyph = svgIcon(n.dir ? FOLDER : FILE);
+  glyph.title = n.dir ? "Folder" : "File";
+  const row = [glyph, el("span", "name", n.name),
                pill(n.read, "read", n.readWhy), pill(n.edit, "edit", n.editWhy)];
   if (!n.dir) { const f = el("div", "file tint-" + n.read); f.append(...row); return f; }
   const d = el("details"), s = el("summary", "tint-" + n.read);

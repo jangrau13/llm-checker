@@ -210,4 +210,21 @@ for call in ({"tool_name": "Read", "tool_input": {"file_path": "/Users/x/.llm-ch
              {"tool_name": "Bash", "tool_input": {"command": "cat ~/.llm-checker/watchlist.txt"}}):
     out = post("/hook", {"hook_event_name": "PreToolUse", **call})
     assert out["hookSpecificOutput"]["permissionDecision"] == "deny", out
+
+# A newer version replaces this server: it reports its version, and stops only for the right token.
+import urllib.error
+
+assert json.loads(urllib.request.urlopen(base + "/version").read())["version"] == server.VERSION
+try:
+    post("/quit", {"token": "wrong"})
+    raise AssertionError("a wrong token must not stop the server")
+except urllib.error.HTTPError as e:
+    assert e.code == 403
+post("/quit", {"token": server.TOKEN})
+time.sleep(0.3)
+try:
+    urllib.request.urlopen(base + "/version", timeout=1)
+    raise AssertionError("the server must stop")
+except OSError:  # refused, or no answer: the test keeps the socket open, the real server closes it
+    pass
 print("ok")
