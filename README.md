@@ -6,13 +6,13 @@ A browser review page for Claude Code commands and tool results. LLM Checker hol
 
 Claude Code can run commands, read files and fetch web pages on your computer. LLM Checker explains commands before they run and displays outgoing tool results supported by the plugin API.
 
-- When command review is on, each Bash command waits on a card. Claude Code explains the command using editable instructions. If the command runs a script such as `python analyse.py` or `./run.sh`, the card also shows the script and the explanation covers its behavior. The default instructions use Simplified Technical English based on [ste80-humanizer](https://github.com/Dodaios/ste80-humanizer).
+- When **Cautiousness high** is ticked, each Bash command waits on a card before it runs, and web search and web fetch results wait before Claude receives them. Unticked, both go through without a card. Claude Code explains the command using editable instructions. If the command runs a script such as `python analyse.py` or `./run.sh`, the card also shows the script and the explanation covers its behavior. The default instructions use Simplified Technical English based on [ste80-humanizer](https://github.com/Dodaios/ste80-humanizer).
 - Tool results wait before Claude receives them. The page renders file contents, command output, web pages, MCP answers, PDFs, images, spreadsheets, HTML, Markdown and code.
 - Local checks scan each result for sensitive data and private watch-list terms. Findings appear on the card and are removed when you send the result. Choose **Send original** to keep them. The private watch list remains in `~/.llm-checker`.
-- Swipe right or press the Right Arrow key to send. Swipe left or press the Left Arrow key to block. Swipe up or press the Up Arrow key to send a website result and trust its site for the project.
+- Swipe right or press Right Arrow, Enter or Y to send. Swipe left or press Left Arrow or N to block. Swipe up or press Up Arrow or T to send a web fetch result and trust its site for the project. Press O to send the original with all findings.
 - The access panel shows the read and edit rules calculated from your Claude Code settings.
 
-Prompts and Read, Edit and Write calls pass through because Claude Code already displays them. Content returned by Read waits for review.
+Prompts, Read, Edit and Write calls, and web search and web fetch calls pass through because Claude Code already displays them or asks for them. Content returned by Read waits for review.
 
 ## Requirements
 

@@ -173,8 +173,6 @@
               background: repeating-linear-gradient(135deg, #fbeceb 0 6px, #fff 6px 12px); }
   .findings ul { margin: 0.3em 0; padding-left: 1.2em; } .findings p { margin: 0.2em 0 0; font-size: 0.9em; }
   .findings .flabel { font-weight: 600; } .findings code { background: #fff; padding: 0 0.3em; border: 1px solid var(--line); }
-  #raw { width: auto !important; height: 40px !important; align-self: center; padding: 0 1em; font-size: 0.85em !important;
-         border-radius: 2px; border: 1.5px dashed var(--bad) !important; color: var(--bad); background: #fff; }
   #watchText { min-height: 10em; width: 100%; font: 0.9em/1.5 ui-monospace, monospace; padding: 0.6em;
                border: 1px solid #d0d4d8; border-radius: 2px; resize: vertical; }
   #style h2.second { margin-top: 1.4em; }
@@ -186,6 +184,9 @@
                             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12); background: #fff; font-size: 1.6em !important; }
   #controls button:hover:not(:disabled) { border-color: var(--brand); }
   #no { color: var(--bad); } #yes { color: var(--ok); } #star { color: var(--brand); }
+  #controls #raw { width: auto !important; height: 40px !important; align-self: center; padding: 0 1.2em;
+                   font-size: 0.85em !important; white-space: nowrap; border: 1px dashed var(--bad);
+                   color: var(--bad); }
   .stamp { border-radius: 2px; } .stamp.send { color: var(--ok); } .stamp.block { color: var(--bad); border-style: dashed; }
   .stamp.trust { color: var(--brand); border-style: double; border-width: 6px; }
   .tabs button { border-radius: 0; border: none; border-bottom: 2px solid transparent; }
@@ -212,7 +213,7 @@
 </aside>
 <aside id="style">
   <h2>Command explanations</h2>
-  <p class="note">"Review commands" holds each Bash command and asks Claude Code to explain it before it runs.
+  <p class="note">"Cautiousness high" holds each Bash command and asks Claude Code to explain it before it runs.
     Edits to these instructions apply to the next command.</p>
   <textarea id="styleText" spellcheck="true"></textarea>
   <div class="row-buttons">
@@ -245,8 +246,8 @@
     <div class="project"><dt>Project</dt><dd id="statProject" class="path">...</dd></div>
   </dl>
   <div class="monitor">
-    <label id="cautionLabel" title="Hold and explain each Bash command before it runs">
-      <input type="checkbox" id="bashBefore"> Review commands</label>
+    <label id="cautionLabel" title="Explain and hold each Bash command before it runs, and hold web search and web fetch results">
+      <input type="checkbox" id="bashBefore"> Cautiousness high</label>
     <span id="statusLabel">Monitoring on</span>
     <button id="power" title="Stop or resume checks">Turn off</button>
   </div>
@@ -254,13 +255,14 @@
 <p id="offBanner" hidden>Checks are off. Items go to Claude immediately and remain in the history.</p>
 <div id="deck"><div class="empty">No items are waiting. Claude is paused or idle.</div></div>
 <div id="controls">
-  <button id="no" title="Block (Left Arrow key)" disabled>x</button>
-  <button id="star" title="Trust this website" disabled>T</button>
-  <button id="yes" title="Send (Right Arrow key)" disabled>+</button>
-  <button id="raw" hidden title="Send the original result with all findings">Send original</button>
+  <button id="no" title="Block (Left Arrow or N)" disabled>x</button>
+  <button id="star" title="Send and trust this website (Up Arrow or T)" disabled>T</button>
+  <button id="yes" title="Send (Right Arrow, Enter or Y)" disabled>✓</button>
+  <button id="raw" hidden title="Send the original result with all findings (O)">Send original</button>
 </div>
-<p class="hint">Swipe right or press the Right Arrow key to send. Swipe left or press the Left Arrow key to block.
-  Swipe up or press the Up Arrow key to send a website result and trust the site for this project.</p>
+<p class="hint">Send: swipe right, or press Right Arrow, Enter or Y. Block: swipe left, or press Left Arrow or N.
+  Send a website result and trust the site for this project: swipe up, or press Up Arrow or T.
+  Send the original with all findings: press O.</p>
 <h2 class="section">History</h2>
 <div id="history"></div>
 </main>
@@ -631,10 +633,14 @@ no.onclick = () => decide(false);
 star.onclick = () => decide(true, true);
 raw.onclick = () => decide(true, false, true);
 document.addEventListener("keydown", e => {
-  if (e.target.closest("textarea, input")) return;  // arrow keys edit text there, not cards
-  if (e.key === "ArrowRight") decide(true);
-  if (e.key === "ArrowLeft") decide(false);
-  if (e.key === "ArrowUp") { e.preventDefault(); decide(true, true); }
+  if (e.target.closest("textarea, input")) return;  // keys type text there, not decisions
+  if (e.key === "Enter" && e.target.closest("button")) return;  // a focused button clicks itself
+  if (e.metaKey || e.ctrlKey || e.altKey) return;  // leave browser shortcuts alone
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (["ArrowRight", "Enter", "y"].includes(key)) decide(true);
+  if (["ArrowLeft", "n"].includes(key)) decide(false);
+  if (["ArrowUp", "t"].includes(key)) { e.preventDefault(); decide(true, true); }
+  if (key === "o" && !raw.hidden) decide(true, false, true);
 });
 
 // ---- sidebar: what Claude can reach ----

@@ -131,8 +131,14 @@ tree = {c["name"]: c for c in access.access(proj)["tree"]["children"]}
 assert tree["results"]["edit"] == "allow" and tree["sources"]["edit"] == "deny", tree
 assert tree["sources"]["read"] == "allow" and tree["private.txt"]["read"] == "deny", tree
 
-fetch = {"hook_event_name": "PreToolUse", "tool_name": "WebFetch", "cwd": str(proj / "results"),
-         "tool_input": {"url": "https://example.org/page", "prompt": "summarise"}}
+fetch = {"hook_event_name": "PostToolUse", "tool_name": "WebFetch", "cwd": str(proj / "results"),
+         "tool_input": {"url": "https://example.org/page", "prompt": "summarise"}, "tool_response": {"result": "page"}}
+# Web calls never wait before they run: Claude Code asks for them itself.
+assert post("/hook", {**fetch, "hook_event_name": "PreToolUse"}) == {}
+# Their results wait only with "Cautiousness high".
+post("/bash-before", {"on": False})
+assert post("/hook", fetch) == {} and post("/hook", {**fetch, "tool_name": "WebSearch"}) == {}
+post("/bash-before", {"on": True})
 t = threading.Thread(target=post, args=("/hook", fetch))
 t.start()
 time.sleep(0.2)

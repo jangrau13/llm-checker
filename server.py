@@ -214,12 +214,15 @@ def read_script(path, limit=100_000):
 # Steps that skip the page: prompts the user typed, and file operations VS Code already shows.
 # The content of a Read result still waits on the page, because that is what leaves the machine.
 # ToolSearch only loads Claude Code's own tool descriptions, no user data.
-PASS_THROUGH = {("UserPromptSubmit", None)} | {("PreToolUse", t) for t in ("Read", "Edit", "Write", "ToolSearch")} | {
+# Web calls: Claude Code's own permission prompt already asks before a search or fetch runs.
+WEB = ("WebFetch", "WebSearch")
+PASS_THROUGH = {("UserPromptSubmit", None)} | {
+    ("PreToolUse", t) for t in ("Read", "Edit", "Write", "ToolSearch", *WEB)} | {
     ("PostToolUse", t) for t in ("Edit", "Write", "ToolSearch")}
 
 paused = [False]  # "Turn off" on the page; back on after a server restart, the safe default
-# "Check commands before they run" on the page. Off by default: Bash commands run without a card or an
-# explanation, and only what they send back to Claude waits on the page.
+# "Cautiousness high" on the page. Off by default: Bash commands run without a card or an explanation,
+# web results go to Claude unseen, and only Bash output and the other tool results wait on the page.
 bash_before = [False]
 inflight = {}  # (event, tool_use_id) -> answer slot; ponytail: never pruned, a few KB per session
 last_poll = [0.0]  # when a page last asked for /state
@@ -324,8 +327,8 @@ def handle_hook(hook):
                                "title": f"{view(hook)[0]} (checker off)", "approved": True,
                                "automatic": True})
         return {}
-    if event == "PreToolUse" and tool == "Bash" and not bash_before[0]:
-        return {}  # the command runs; its output still waits on the page before it goes to Claude
+    if not bash_before[0] and (event == "PreToolUse" and tool == "Bash" or tool in WEB):
+        return {}  # the command runs (its output still waits on the page); web results go straight to Claude
     url = (hook.get("tool_input") or {}).get("url")
     if tool == "WebFetch" and access.trusted(root, url):
         with lock:  # a site trusted for this project: logged, no click needed
