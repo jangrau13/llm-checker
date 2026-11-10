@@ -41,16 +41,25 @@ ls_explained = {**ls, "tool_input": {"command": "ls", "description": "Lists the 
 reason = lambda out: out["hookSpecificOutput"]["permissionDecisionReason"]
 
 # By default commands run without a card or an explanation; only their output waits.
-# Every command that runs prints its exit code on failure, so the failure arrives as a cleanable result.
+# Every command that runs is changed to never fail, so a failure arrives as a cleanable result.
 wrapped = lambda cmd: {"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                              "updatedInput": {"command": cmd + server.EXIT_SUFFIX["Bash"]}}}
+                                              "updatedInput": {"command": server.BASH_PREFIX + cmd}}}
 assert post("/hook", ls) == wrapped("ls")
 assert post("/hook", {**ls, "tool_input": {"command": "sleep 9", "run_in_background": True}}) == {}
 import subprocess
 
-for cmd, failed in (("ls /no-such-folder", True), ("echo ok", False)):
-    r = subprocess.run(["bash", "-c", cmd + server.EXIT_SUFFIX["Bash"]], capture_output=True, text=True)
-    assert r.returncode == 0 and ("Exit code" in r.stdout) == failed, r
+for cmd, shown in (("echo ok", "ok\n"), ("echo secret >&2; exit 3", "secret\nExit code 3\n"),
+                   ("echo secret; if then", "Exit code 2\n"), ("ls /no-such-folder", "Exit code 1\n")):
+    # Claude Code runs a command roughly like this: eval, then record the folder
+    r = subprocess.run(["bash", "-c", 'eval "$1" && pwd -P >| /dev/null', "_", server.BASH_PREFIX + cmd],
+                       capture_output=True, text=True, cwd=TMP)
+    assert r.returncode == 0 and r.stdout.endswith(shown) and not r.stderr, (cmd, r)
+# A killed command (a timeout) prints nothing, so its error carries none of the output.
+p = subprocess.Popen(["bash", "-c", server.BASH_PREFIX + "echo secret; sleep 5"], stdout=subprocess.PIPE, cwd=TMP)
+time.sleep(0.5)
+p.terminate()
+assert p.communicate()[0] == b"" and p.returncode == 143
+assert not list(TMP.glob(".lc-output.*")), "buffer files are removed"
 assert post("/bash-before", {"on": True})["bash_before"]  # "Cautiousness high", for the tests below
 
 # Pre-step: the first call goes straight back to Claude Code with the request to explain it.
@@ -60,7 +69,7 @@ assert reason(post("/hook", ls)) == server.summary_request()
 changed = {**ls, "tool_input": {"command": "ls -la", "description": "Lists the files in this folder."}}
 item, out = hook_then_decide(changed, True)
 assert item["summary"] == "Lists the files in this folder." and item["content"]["command"] == "ls -la"
-assert out["hookSpecificOutput"]["updatedInput"]["command"] == "ls -la" + server.EXIT_SUFFIX["Bash"], out
+assert out["hookSpecificOutput"]["updatedInput"]["command"] == server.BASH_PREFIX + "ls -la", out
 assert opened, "a waiting card opens the page when none is open"
 
 # A command that runs a script: Claude Code is asked to read and explain the script too,

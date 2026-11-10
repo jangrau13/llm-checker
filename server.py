@@ -177,27 +177,32 @@ def protected(root):
     return seen
 
 
-# Added to every Bash and PowerShell command that runs: a failing command then ends normally and prints its
-# exit code, so its output arrives as a result the page can clean or block. Claude Code offers no way to
-# replace error text.
-EXIT_SUFFIX = {
-    "Bash": '\n__lc=$?; [ "$__lc" -eq 0 ] || echo "Exit code $__lc"',
-    # $? is false after a failed cmdlet or a native program with a nonzero exit code
-    "PowerShell": '\n$__lc = $?; if (-not $__lc) { "Exit code $(if ($LASTEXITCODE) { $LASTEXITCODE } else { 1 })" }',
-}
+# Claude Code offers no way to replace error text, so every Bash and PowerShell command that runs is changed
+# to never fail: its output then arrives as a result the page can clean or block.
+# Bash: all output goes to a buffer file and is printed when the shell ends, with the exit code if it failed.
+# exit, syntax errors and failing commands therefore end as a normal result; a killed command (timeout)
+# prints nothing, so its error carries no output. Without a buffer file the command does not run.
+# ponytail: a KILL leaves the buffer file behind in the folder; a command that sets its own EXIT trap
+# replaces this trap, so its output is never printed
+BASH_PREFIX = r'''__lcf=$(mktemp 2>/dev/null || mktemp "$PWD/.lc-output.XXXXXX") || { echo "LLM Checker: no buffer file could be created, so the command did not run."; exit 0; }
+trap '__lc=$?; exec 1>&8 2>&9; cat "$__lcf"; rm -f "$__lcf"; [ "$__lc" -eq 0 ] || echo "Exit code $__lc"; exit 0' EXIT
+trap 'trap - EXIT; rm -f "$__lcf"; exit 143' TERM INT HUP
+exec 8>&1 9>&2 >"$__lcf" 2>&1
+'''
+# PowerShell: $? is false after a failed cmdlet or a native program with a nonzero exit code.
+# ponytail: untested; a command calling exit or stopping on a terminating error still fails as an error
+PS_SUFFIX = '\n$__lc = $?; if (-not $__lc) { "Exit code $(if ($LASTEXITCODE) { $LASTEXITCODE } else { 1 })" }'
+SHELLS = {"Bash": lambda c: BASH_PREFIX + c, "PowerShell": lambda c: c + PS_SUFFIX}
 
 
 def shell_runs(hook):
-    """The answer that lets a Bash or PowerShell call run, with its EXIT_SUFFIX added. Approve = no permission
+    """The answer that lets a Bash or PowerShell call run, changed to never fail. Approve = no permission
     decision, so the normal permission flow still applies to the changed command."""
     i = hook.get("tool_input") or {}
-    suffix = EXIT_SUFFIX.get(hook.get("tool_name"))
-    if not suffix or i.get("run_in_background") or not str(i.get("command") or "").strip():
+    change = SHELLS.get(hook.get("tool_name"))
+    if not change or i.get("run_in_background") or not str(i.get("command") or "").strip():
         return {}  # background output goes to a file, not into this result
-    # ponytail: a command ending in a line continuation (\ or `), calling exit, or stopping on a terminating
-    # PowerShell error still fails as an error
-    return {"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                   "updatedInput": {**i, "command": i["command"] + suffix}}}
+    return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": {**i, "command": change(i["command"])}}}
 
 
 def summary_request(scripts=(), root=None):
@@ -408,7 +413,7 @@ def handle_hook(hook):
         pending[item["id"]] = entry
     ensure_page_open()
     entry["event"].wait()  # blocks the hook, and with it Claude, until a decision
-    if event == "PreToolUse" and tool in EXIT_SUFFIX and entry["approve"]:
+    if event == "PreToolUse" and tool in SHELLS and entry["approve"]:
         return shell_runs(hook)
     return answer(hook, entry["approve"], clean=entry["clean"])
 
