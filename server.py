@@ -10,6 +10,7 @@ and opens the page. The tool hooks are HTTP hooks, so they need no shell or curl
 
 import itertools
 import json
+import shlex
 import threading
 import time
 import webbrowser
@@ -45,10 +46,41 @@ def style():
     return STYLE_FILE.read_text(encoding="utf-8").strip() if STYLE_FILE.exists() else DEFAULT_STYLE
 
 
-def summary_request():
+def summary_request(scripts=()):
     """Sent to Claude Code as the reason for holding back a Bash call it has not explained yet."""
-    return ("Not run yet: the user wants an explanation first. Call Bash again for this step and write "
-            "the explanation in `description`, following these instructions from the user:\n\n" + style())
+    read_first = ("This command runs these script files: " + ", ".join(scripts) + ". Read each of them "
+                  "first and explain what they do as part of the explanation, in particular which files "
+                  "they read, change or delete and what they send to Claude or over the internet. "
+                  ) if scripts else ""
+    return ("Not run yet: the user wants an explanation first. " + read_first + "Call Bash again for this "
+            "step and write the explanation in `description`, following these instructions from the user:"
+            "\n\n" + style())
+
+
+SCRIPT_EXT = (".py", ".sh", ".bash", ".zsh", ".r", ".js", ".mjs", ".ts", ".pl", ".rb", ".ps1", ".jl")
+
+
+def scripts_in(command, cwd):
+    """Script files a Bash command runs: words ending in a script extension or starting with ./ that exist."""
+    try:
+        words = shlex.split(command or "")
+    except ValueError:  # unbalanced quotes: fall back to plain splitting
+        words = (command or "").split()
+    found = []
+    for w in words:
+        w = w.strip(";&|()<>")
+        if w and not w.startswith("-") and (w.lower().endswith(SCRIPT_EXT) or w.startswith("./")):
+            # ponytail: paths are taken relative to the session folder, so "cd sub && python x.py" is missed,
+            # and so is "python -m module"; Claude is still asked to explain the command itself
+            p = (Path(cwd or ".") / Path(w).expanduser()).resolve()
+            if p.is_file() and str(p) not in found:
+                found.append(str(p))
+    return found
+
+
+def read_script(path, limit=100_000):
+    text = Path(path).read_text(encoding="utf-8", errors="replace")
+    return text if len(text) <= limit else text[:limit] + f"\n... ({len(text) - limit} more characters not shown)"
 
 # Steps that skip the page: prompts the user typed, and file operations VS Code already shows.
 # The content of a Read result still waits on the page, because that is what leaves the machine.
@@ -81,12 +113,12 @@ explained = set()  # (session, agent) whose next Bash call carries the explanati
 last_root = [access.project_root()]  # project of the latest hook call; the sidebar shows its access
 
 
-def view(hook, ask_summary):
+def view(hook, request=None):
     """The part of the hook input the page shows."""
     event = hook.get("hook_event_name")
-    if ask_summary:
+    if request:
         return "Asked Claude Code to explain this Bash command first (automatic)", {
-            "command": hook["tool_input"].get("command"), "sent to Claude": summary_request()}
+            "command": hook["tool_input"].get("command"), "sent to Claude": request}
     if event == "UserPromptSubmit":
         return "Your prompt -> Claude", hook.get("prompt")
     if event == "PreToolUse":
@@ -109,15 +141,16 @@ def redact(value, key=None):
     return value
 
 
-def answer(hook, approve, ask_summary):
-    """Hook JSON output. Approve = empty output, so the normal permission flow still applies."""
-    if approve and not ask_summary:
+def answer(hook, approve, request=None):
+    """Hook JSON output. Approve = empty output, so the normal permission flow still applies.
+    request: the explanation request that holds back an unexplained Bash call."""
+    if approve and not request:
         return {}
     event = hook.get("hook_event_name")
     if event == "UserPromptSubmit":
         return {"decision": "block", "reason": "Rejected in the approval page."}
     if event == "PreToolUse":
-        reason = summary_request() if ask_summary else "The user rejected this tool call in the approval page."
+        reason = request or "The user rejected this tool call in the approval page."
         return {"hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
@@ -146,8 +179,8 @@ def handle_hook(hook):
     last_root[0] = root
     if paused[0]:  # turned off on the page: logged, everything passes
         with lock:
-            history.insert(0, {"id": next(ids), "event": event, "tool": tool, "content": view(hook, False)[1],
-                               "title": f"{view(hook, False)[0]} (checker off, automatic)", "approved": True})
+            history.insert(0, {"id": next(ids), "event": event, "tool": tool, "content": view(hook)[1],
+                               "title": f"{view(hook)[0]} (checker off, automatic)", "approved": True})
         return {}
     url = (hook.get("tool_input") or {}).get("url")
     if tool == "WebFetch" and access.trusted(root, url):
@@ -164,7 +197,9 @@ def handle_hook(hook):
         ask_summary = bash and key not in explained
         if bash:
             explained.discard(key)  # the retry is gated once; the session's next Bash call asks again
-    title, content = view(hook, ask_summary)
+    scripts = scripts_in((hook.get("tool_input") or {}).get("command"), hook.get("cwd")) if bash else []
+    request = summary_request(scripts) if ask_summary else None
+    title, content = view(hook, request)
     item = {"id": next(ids), "event": event, "title": title, "content": content,
             "session": hook.get("session_id"), "tool": tool, "input": hook.get("tool_input")}
     if hook.get("agent_id"):  # the step comes from a subagent, not from the main conversation
@@ -173,9 +208,11 @@ def handle_hook(hook):
         with lock:
             explained.add(key)
             history.insert(0, {**item, "approved": True})
-        return answer(hook, True, True)
+        return answer(hook, True, request)
     if bash:
         item["summary"] = hook["tool_input"].get("description")
+        # Shown on the card from your disk, so you can check the code yourself; not sent to Claude by this.
+        item["scripts"] = [{"path": p, "content": read_script(p)} for p in scripts]
     if event == "PostToolUseFailure":
         item["note"] = FAILURE_NOTE
     if tool == "WebFetch" and access.host(url):
@@ -185,7 +222,7 @@ def handle_hook(hook):
         pending[item["id"]] = entry
     ensure_page_open()
     entry["event"].wait()  # blocks the hook, and with it Claude, until a decision
-    return answer(hook, entry["approve"], False)
+    return answer(hook, entry["approve"])
 
 
 class Handler(BaseHTTPRequestHandler):

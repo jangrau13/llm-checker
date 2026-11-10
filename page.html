@@ -148,6 +148,7 @@
   .UserPromptSubmit { background: #3c3c3c; } .PreToolUse { background: var(--brand); } .PostToolUse { background: #6b6b6b; }
   .PostToolUseFailure { background: var(--bad); }
   .badge.agent { background: #fff; color: var(--ink); border: 1.5px dashed var(--ink); }
+  .script-label { margin: 0.9em 0 0.2em; font-weight: 600; color: #444; }
   #power { margin-top: 0.5em; border: 1.5px solid var(--ink); background: #fff; color: var(--ink); border-radius: 2px;
            padding: 0.3em 1em; cursor: pointer; font: inherit; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.05em; }
   #power.off { background: var(--ink); color: #fff; }
@@ -484,6 +485,12 @@ function body(item) {
   const div = el("div", "body");
   if (item.tool === "Bash") div.append(terminal(item));
   else div.append(render(item.content, item.event === "UserPromptSubmit" ? {ext: "md", label: "your prompt"} : {}));
+  for (const s of item.scripts || []) {
+    // The script the command runs, read from your disk for this page only.
+    const name = s.path.split(/[\\/]/).pop(), ext = name.includes(".") ? name.split(".").pop() : "bash";
+    div.append(el("p", "script-label", "Script this command runs (shown from your disk, not sent to Claude by this card):"),
+               tabs(s.path, [[ext, () => editor(s.content, ext)]]));
+  }
   return div;
 }
 

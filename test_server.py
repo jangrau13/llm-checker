@@ -49,6 +49,17 @@ item, out = hook_then_decide(changed, True)
 assert item["summary"] == "Lists the files in this folder." and item["content"]["command"] == "ls -la" and out == {}
 assert opened, "a waiting card opens the page when none is open"
 
+# A command that runs a script: Claude Code is asked to read and explain the script too,
+# and the card shows the script's code from disk.
+(TMP / "demo.py").write_text("print(open('data.csv').read())\n")
+run = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "s2", "cwd": str(TMP.parent),
+       "tool_input": {"command": "python3 tmp/demo.py --verbose"}}
+asked = reason(post("/hook", run))
+assert str(TMP / "demo.py") in asked and "Read each of them" in asked, asked
+item, _ = hook_then_decide({**run, "tool_input": {**run["tool_input"], "description": "Prints data.csv."}}, True)
+assert item["scripts"] == [{"path": str(TMP / "demo.py"), "content": "print(open('data.csv').read())\n"}]
+assert server.scripts_in("ls -la && echo done", str(TMP.parent)) == []
+
 # Turned off: steps pass without a card but stay in the history; turned on again, they wait.
 post("/pause", {"paused": True})
 assert post("/hook", ls_explained) == {}
