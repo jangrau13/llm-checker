@@ -26,16 +26,12 @@
            display: flex; flex-direction: column; }
   #style h2 { font-size: 1.1em; margin: 0.2em 0 0.4em; color: var(--brand); }
   #style .note { color: #777; }
-  #styleText { flex: 1; min-height: 16em; width: 100%; font: inherit; line-height: 1.5; padding: 0.6em;
+  #styleText { flex: 1; min-height: 12em; width: 100%; font: inherit; line-height: 1.5; padding: 0.6em;
                border: 1px solid #d0d4d8; border-radius: 8px; resize: none; }
   #styleText:focus { outline: 2px solid var(--accent); border-color: transparent; }
   .row-buttons { display: flex; gap: 0.5em; align-items: center; margin-top: 0.6em; }
   .row-buttons button { border: none; border-radius: 6px; padding: 0.45em 1em; cursor: pointer; font: inherit; }
   #saveStyle { background: var(--brand); color: #fff; } #resetStyle { background: #eceef1; }
-  header { text-align: center; padding: 1em 0 0.4em; }
-  header h1 { margin: 0; font-size: 1.4em; color: var(--brand); }
-  header .brand { font-weight: 800; letter-spacing: 0.02em; }
-  header p { margin: 0.2em 0 0; color: #666; }
   h2.section { width: min(900px, 94%); margin: 1.5em auto 0; font-size: 1.1em; color: var(--brand); }
   #access { position: fixed; inset: 0 auto 0 0; width: var(--side); overflow: auto; background: #fff;
             border-right: 1px solid #e1e4e8; padding: 0.8em 0.9em 2em; font-size: 0.88em; }
@@ -133,9 +129,33 @@
   .sent { --c: #1a9c4a; } .blocked { --c: #d23; } .auto { --c: #aaa; }
 
   /* ---- theme: flat tiles, uppercase section labels ---- */
-  header { border-bottom: 1px solid var(--line); padding: 0.9em 0 0.7em; }
-  header h1 { font-size: 1.5em; font-weight: 700; letter-spacing: 0.02em; color: var(--brand); margin: 0; }
-  header p { font-size: 0.85em; }
+  /* ---- audit header: product, figures, monitored project, monitoring state ---- */
+  header.topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 1.6em;
+                  padding: 0.65em 1.2em; background: #fff; border-bottom: 2px solid var(--brand); }
+  .product { display: flex; align-items: center; gap: 0.65em; }
+  .monogram { width: 34px; height: 34px; display: grid; place-items: center; background: var(--brand); color: #fff;
+              font-weight: 700; font-size: 0.85em; letter-spacing: 0.04em; border-radius: 2px; }
+  .product h1 { margin: 0; font-size: 1.05em; font-weight: 700; color: var(--ink); line-height: 1.2; }
+  .product .sub { font-size: 0.68em; text-transform: uppercase; letter-spacing: 0.1em; color: #6b6b6b; }
+  .figures { display: flex; margin: 0; flex: 1; }
+  .figures div { padding: 0 1.1em; border-left: 1px solid var(--line); min-width: 0; }
+  .figures dt { font-size: 0.66em; text-transform: uppercase; letter-spacing: 0.1em; color: #6b6b6b; }
+  .figures dd { margin: 0; font-size: 1.05em; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .figures dd.path { font-weight: 400; font-size: 0.85em; font-family: ui-monospace, monospace;
+                     max-width: 22em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .monitor { display: flex; align-items: center; gap: 0.6em; }
+  #statusLabel { font-size: 0.72em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+                 padding: 0.3em 0.7em; border: 1.5px solid var(--ok); color: var(--ok); border-radius: 2px; white-space: nowrap; }
+  #statusLabel.off { border: 1.5px dashed var(--bad); color: var(--bad); }
+  #power { border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 2px; padding: 0.35em 0.9em;
+           cursor: pointer; font: inherit; font-size: 0.8em; }
+  #power:hover { border-color: var(--ink); }
+  #cautionLabel { display: flex; align-items: center; gap: 0.35em; font-size: 0.8em; font-weight: 600; cursor: pointer;
+                  white-space: nowrap; }
+  #bashBefore { width: 1.05em; height: 1.05em; accent-color: var(--brand); cursor: pointer; }
+  #offBanner { margin: 0; padding: 0.5em 1.2em; font-weight: 600; border-bottom: 2px dashed var(--bad);
+               background: repeating-linear-gradient(135deg, #f6e3e1 0 6px, #fff 6px 12px); }
+  @media (max-width: 1500px) { .figures .project { display: none; } }
   #access h2, #style h2, h2.section { font-size: 0.85em; font-weight: 700; text-transform: uppercase;
                                       letter-spacing: 0.08em; color: #3c3c3c; border-bottom: 2px solid var(--brand);
                                       padding-bottom: 0.3em; }
@@ -149,11 +169,16 @@
   .PostToolUseFailure { background: var(--bad); }
   .badge.agent { background: #fff; color: var(--ink); border: 1.5px dashed var(--ink); }
   .script-label { margin: 0.9em 0 0.2em; font-weight: 600; color: #444; }
-  #power { margin-top: 0.5em; border: 1.5px solid var(--ink); background: #fff; color: var(--ink); border-radius: 2px;
-           padding: 0.3em 1em; cursor: pointer; font: inherit; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.05em; }
-  #power.off { background: var(--ink); color: #fff; }
-  #offBanner { margin: 0.6em auto 0; width: min(900px, 94%); padding: 0.5em 0.8em; font-weight: 600;
-               border: 2px dashed var(--bad); background: repeating-linear-gradient(135deg, #f6e3e1 0 6px, #fff 6px 12px); }
+  .findings { margin: 0.6em 0 0; padding: 0.5em 0.8em; border: 2px dashed var(--bad);
+              background: repeating-linear-gradient(135deg, #fbeceb 0 6px, #fff 6px 12px); }
+  .findings ul { margin: 0.3em 0; padding-left: 1.2em; } .findings p { margin: 0.2em 0 0; font-size: 0.9em; }
+  .findings .flabel { font-weight: 600; } .findings code { background: #fff; padding: 0 0.3em; border: 1px solid var(--line); }
+  #raw { width: auto !important; height: 40px !important; align-self: center; padding: 0 1em; font-size: 0.85em !important;
+         border-radius: 2px; border: 1.5px dashed var(--bad) !important; color: var(--bad); background: #fff; }
+  #watchText { min-height: 10em; width: 100%; font: 0.9em/1.5 ui-monospace, monospace; padding: 0.6em;
+               border: 1px solid #d0d4d8; border-radius: 2px; resize: vertical; }
+  #style h2.second { margin-top: 1.4em; }
+  #style .detectors { font-size: 0.85em; color: #555; }
   .explain { background: #eef2f7; border-left-color: var(--brand); }
   .explain.warn-note { background: #fff8e8; border-left: 4px dashed #8a6d1d; }
   #controls { gap: 1em; }
@@ -176,42 +201,66 @@
 </style>
 
 <aside id="access">
-  <h2>What Claude can reach</h2>
-  <p class="legend"><span class="pill allow">&#x2713; read</span> without asking<br>
-    <span class="pill ask">? edit</span> asks you first<br><span class="pill deny">&#x2715; read</span> blocked</p>
-  <div id="tree">Loading...</div>
+  <h2>Claude Code access</h2>
+  <p class="legend"><span class="pill allow">+ read</span> allowed<br>
+    <span class="pill ask">? edit</span> requires approval<br><span class="pill deny">x read</span> blocked</p>
+  <div id="tree">Loading access rules...</div>
   <h3>Outside the project</h3><div id="outside"></div>
   <h3>Websites</h3><div id="sites"></div>
-  <h3>Bash commands</h3><div id="sandbox"></div>
-  <p class="note">Worked out from the settings files. Hooks (such as a script that asks before
-    touching files outside the project) can add checks this list does not show.</p>
+  <h3>Bash access</h3><div id="sandbox"></div>
+  <p class="note">This list comes from Claude Code settings. Hooks may enforce additional rules.</p>
 </aside>
 <aside id="style">
-  <h2>How Claude Code explains commands</h2>
-  <p class="note">Before a Bash command runs, Claude Code is asked to explain it following these
-    instructions. Changes apply to the next command.</p>
+  <h2>Command explanations</h2>
+  <p class="note">"Review commands" holds each Bash command and asks Claude Code to explain it before it runs.
+    Edits to these instructions apply to the next command.</p>
   <textarea id="styleText" spellcheck="true"></textarea>
   <div class="row-buttons">
     <button id="saveStyle">Save</button>
-    <button id="resetStyle">Back to default</button>
+    <button id="resetStyle">Restore default</button>
     <span id="styleMsg" class="note"></span>
   </div>
+  <h2 class="second">Private watch list</h2>
+  <p class="note">LLM Checker compares every result with this local list before sending it to Claude. Add one
+    name or project code per line. Prefix regular expressions with <code>re:</code> and comments with #.
+    The list is stored in ~/.llm-checker.</p>
+  <textarea id="watchText" spellcheck="false" placeholder="Anna Huber&#10;K_COLD&#10;re:PRJ-\d{4}"></textarea>
+  <div class="row-buttons">
+    <button id="saveWatch">Save</button>
+    <span id="watchMsg" class="note"></span>
+  </div>
+  <p class="detectors" id="detectors"></p>
 </aside>
 <main>
-<header>
-  <h1>LLM Checker</h1>
-  <p id="count">Nothing waiting</p>
-  <button id="power" title="Turn the checker off or on">Turn off</button>
-  <p id="offBanner" hidden>Checker is off: every step goes to Claude without a card. Steps are still listed in the history.</p>
+<header class="topbar">
+  <div class="product">
+    <div class="monogram" aria-hidden="true">LC</div>
+    <div><h1>LLM Checker</h1><div class="sub">Review data before Claude receives it</div></div>
+  </div>
+  <dl class="figures">
+    <div><dt>Waiting</dt><dd id="count">0</dd></div>
+    <div><dt>Sent</dt><dd id="statSent">0</dd></div>
+    <div><dt>Blocked</dt><dd id="statBlocked">0</dd></div>
+    <div><dt>Passed automatically</dt><dd id="statAuto">0</dd></div>
+    <div class="project"><dt>Project</dt><dd id="statProject" class="path">...</dd></div>
+  </dl>
+  <div class="monitor">
+    <label id="cautionLabel" title="Hold and explain each Bash command before it runs">
+      <input type="checkbox" id="bashBefore"> Review commands</label>
+    <span id="statusLabel">Monitoring on</span>
+    <button id="power" title="Stop or resume checks">Turn off</button>
+  </div>
 </header>
-<div id="deck"><div class="empty">Nothing waiting. Claude is paused or idle.</div></div>
+<p id="offBanner" hidden>Checks are off. Items go to Claude immediately and remain in the history.</p>
+<div id="deck"><div class="empty">No items are waiting. Claude is paused or idle.</div></div>
 <div id="controls">
-  <button id="no" title="Block (left arrow)" disabled>&#x2715;</button>
-  <button id="star" title="Only for websites" disabled>&#x2605;</button>
-  <button id="yes" title="Send (right arrow)" disabled>&#x2713;</button>
+  <button id="no" title="Block (Left Arrow key)" disabled>x</button>
+  <button id="star" title="Trust this website" disabled>T</button>
+  <button id="yes" title="Send (Right Arrow key)" disabled>+</button>
+  <button id="raw" hidden title="Send the original result with all findings">Send original</button>
 </div>
-<p class="hint">Swipe right or press &rarr; to send. Swipe left or press &larr; to block.
-  For a website, swipe up or press &uarr; to send and trust it in this project.</p>
+<p class="hint">Swipe right or press the Right Arrow key to send. Swipe left or press the Left Arrow key to block.
+  Swipe up or press the Up Arrow key to send a website result and trust the site for this project.</p>
 <h2 class="section">History</h2>
 <div id="history"></div>
 </main>
@@ -317,12 +366,12 @@ function loadSheetJS() {
 }
 
 function workbook(bytes, label) {
-  const box = el("div", "", "Loading the spreadsheet viewer...");
+  const box = el("div", "", "Loading spreadsheet...");
   loadSheetJS().then(() => {
     const wb = XLSX.read(bytes, {type: "array"});
     box.replaceChildren(tabs(label || "Workbook", wb.SheetNames.map(name =>
       [name, () => grid(XLSX.utils.sheet_to_json(wb.Sheets[name], {header: 1, defval: ""}).map(r => r.map(String)))])));
-  }).catch(e => { box.textContent = "ZIP file, not a readable spreadsheet (" + e.message + ")"; });
+  }).catch(e => { box.textContent = "Could not display this ZIP file as a spreadsheet: " + e.message; });
   return box;
 }
 
@@ -421,13 +470,28 @@ function header(item) {
   head.append(el("span", "title", "#" + item.id + "  " + item.title));
   if (item.summary) {
     const p = el("p", "explain");
-    p.append(el("b", "", "Claude Code explains: "), item.summary);
+    p.append(el("b", "", "Command explanation: "), item.summary);
     head.append(p);
   }
   if (item.note) {
     const p = el("p", "explain warn-note");
-    p.append(el("b", "", "Note: "), item.note);
+    p.append(item.note);
     head.append(p);
+  }
+  if (item.findings && item.findings.length) {
+    const box = el("div", "findings");
+    box.append(el("b", "", "Review these findings before sending:"));
+    const ul = el("ul");
+    for (const f of item.findings) {
+      const li = el("li");
+      const shown = f.match.length > 60 ? f.match.slice(0, 57) + "..." : f.match;
+      li.append(el("span", "flabel", f.label), " ", el("code", "", shown), f.count > 1 ? " x" + f.count : "");
+      ul.append(li);
+    }
+    box.append(ul, el("p", "", item.cleanable
+      ? "Send removes the listed text. Send original keeps it."
+      : "Block this error and rewind past this step to keep it from Claude."));
+    head.append(box);
   }
   return head;
 }
@@ -440,15 +504,15 @@ function terminal(item) {
   const out = pre ? {} : item.content || {};
   const term = el("div", "term"), bar = el("div", "term-bar");
   for (const c of ["#ff5f57", "#febc2e", "#28c840"]) { const d = el("span", "dot"); d.style.background = c; bar.append(d); }
-  bar.append(el("span", "", pre ? "bash: Claude wants to run" : "bash: output going to Claude"));
+  bar.append(el("span", "", pre ? "Bash command waiting for approval" : "Bash output waiting to be sent"));
   const chips = [];
-  if (input.run_in_background) chips.push(["runs in background", ""]);
+  if (input.run_in_background) chips.push(["background task", ""]);
   if (input.timeout) chips.push(["timeout " + Math.round(input.timeout / 1000) + " s", ""]);
   const failed = item.event === "PostToolUseFailure";
   if (failed) chips.push(["failed", "bad"]);
   else if (!pre) {
     if (out.interrupted) chips.push(["interrupted", "bad"]);
-    else chips.push([out.stderr ? "finished, with stderr" : "finished", out.stderr ? "bad" : "good"]);
+    else chips.push([out.stderr ? "finished with error output" : "finished", out.stderr ? "bad" : "good"]);
   }
   for (const [text, cls] of chips) bar.append(el("span", "chip " + cls, text));
   term.append(bar);
@@ -464,7 +528,7 @@ function terminal(item) {
   section("command", "", cmd);
 
   if (failed) {
-    section("error output going to Claude", "stderr", el("pre", "", out.error || "(empty)"));
+    section("error waiting to be sent", "stderr", el("pre", "", out.error || "(empty)"));
     const box = el("div");
     box.append(term);
     return box;
@@ -488,7 +552,7 @@ function body(item) {
   for (const s of item.scripts || []) {
     // The script the command runs, read from your disk for this page only.
     const name = s.path.split(/[\\/]/).pop(), ext = name.includes(".") ? name.split(".").pop() : "bash";
-    div.append(el("p", "script-label", "Script this command runs (shown from your disk, not sent to Claude by this card):"),
+    div.append(el("p", "script-label", "Script read from your disk for this review:"),
                tabs(s.path, [[ext, () => editor(s.content, ext)]]));
   }
   return div;
@@ -499,19 +563,21 @@ const deck = document.getElementById("deck");
 const yes = document.getElementById("yes"), no = document.getElementById("no");
 let current = null, deciding = false;
 
-async function decide(approve, trust = false) {
+// With findings, sending means sending the cleaned version; only "Send original" keeps the findings.
+async function decide(approve, trust = false, unchanged = false) {
   if (!current || deciding || (trust && !current.site)) return;
   deciding = true;
+  const clean = approve && !unchanged && !!current.cleanable;
   const card = deck.querySelector(".card");
   card.style.transform = trust ? "translateY(-120vh)"
                                : `translateX(${approve ? 150 : -150}vw) rotate(${approve ? 30 : -30}deg)`;
-  await fetch("/decide", {method: "POST", body: JSON.stringify({id: current.id, approve, trust})});
+  await fetch("/decide", {method: "POST", body: JSON.stringify({id: current.id, approve, trust, clean})});
   setTimeout(() => { deciding = false; current = null; refresh(); if (trust) loadAccess(); }, 250);
 }
 
 function makeCard(item) {
   const card = el("div", "card");
-  const send = el("div", "stamp send", "SEND"), block = el("div", "stamp block", "BLOCK");
+  const send = el("div", "stamp send", item.cleanable ? "SEND CLEANED" : "SEND"), block = el("div", "stamp block", "BLOCK");
   card.append(header(item), body(item), send, block);
 
   const trustStamp = el("div", "stamp trust", "TRUST SITE");
@@ -550,13 +616,20 @@ function makeCard(item) {
 
 const star = document.getElementById("star");
 const power = document.getElementById("power");
+const bashBefore = document.getElementById("bashBefore");
+bashBefore.onchange = async () => {
+  await fetch("/bash-before", {method: "POST", body: JSON.stringify({on: bashBefore.checked})});
+  refresh();
+};
 power.onclick = async () => {
   await fetch("/pause", {method: "POST", body: JSON.stringify({paused: power.textContent === "Turn off"})});
   refresh();
 };
+const raw = document.getElementById("raw");
 yes.onclick = () => decide(true);
 no.onclick = () => decide(false);
 star.onclick = () => decide(true, true);
+raw.onclick = () => decide(true, false, true);
 document.addEventListener("keydown", e => {
   if (e.target.closest("textarea, input")) return;  // arrow keys edit text there, not cards
   if (e.key === "ArrowRight") decide(true);
@@ -566,25 +639,25 @@ document.addEventListener("keydown", e => {
 
 // ---- sidebar: what Claude can reach ----
 function pill(kind, label, why) {
-  const p = el("span", "pill " + kind, {allow: "✓ ", ask: "? ", deny: "✕ "}[kind] + label);
-  p.title = label + ": " + {allow: "without asking", ask: "asks you first", deny: "blocked"}[kind] + "\n" + why;
+  const p = el("span", "pill " + kind, {allow: "+ ", ask: "? ", deny: "x "}[kind] + label);
+  p.title = label + ": " + {allow: "allowed", ask: "requires approval", deny: "blocked"}[kind] + "\n" + why;
   return p;
 }
 function treeNode(n, depth) {
-  const row = [el("span", "", n.dir ? "\u{1F4C1}" : "\u{1F4C4}"), el("span", "name", n.name),
+  const row = [el("span", "", n.dir ? "[D]" : "[F]"), el("span", "name", n.name),
                pill(n.read, "read", n.readWhy), pill(n.edit, "edit", n.editWhy)];
   if (!n.dir) { const f = el("div", "file tint-" + n.read); f.append(...row); return f; }
   const d = el("details"), s = el("summary", "tint-" + n.read);
   d.open = depth < 2;
   s.append(...row);
   d.append(s, ...n.children.map(c => treeNode(c, depth + 1)));
-  if (n.truncated) d.append(el("div", "file", "... more not shown"));
+  if (n.truncated) d.append(el("div", "file", "Additional entries hidden"));
   return d;
 }
 function list(items, text) {
   const ul = el("ul");
   for (const i of items) { const li = el("li"); li.append(pill(i.kind, i.label || i.kind, i.why || ""), " ", text(i)); ul.append(li); }
-  return items.length ? ul : el("p", "note", "None.");
+  return items.length ? ul : el("p", "note", "No entries");
 }
 let accessKey = "";
 async function loadAccess() {
@@ -592,12 +665,15 @@ async function loadAccess() {
   if (text === accessKey) return;  // unchanged: keep the folders you opened or closed
   accessKey = text;
   const a = JSON.parse(text);
+  const projectField = document.getElementById("statProject");
+  projectField.textContent = a.root.split(/[\\/]/).pop();
+  projectField.title = a.root;
   document.getElementById("tree").replaceChildren(treeNode(a.tree, 0));
   const outside = a.outside.map(o => ({...o, label: o.action, why: o.rule + " (" + o.source + ")"}));
   const allowed = outside.filter(o => o.kind === "allow");
   const out = el("div");
   out.append(list(allowed, o => o.path));
-  for (const [kind, text] of [["deny", "blocked"], ["ask", "asks you first"]]) {
+  for (const [kind, text] of [["deny", "blocked"], ["ask", "require approval"]]) {
     const group = outside.filter(o => o.kind === kind);
     if (!group.length) continue;
     const d = el("details");  // collapsed: long lists of protective rules
@@ -608,29 +684,27 @@ async function loadAccess() {
   const project = a.sites.filter(s => s.source === "project" || s.source === "local");
   const other = a.sites.filter(s => !project.includes(s));
   const sites = el("div");
-  sites.append(el("p", "note", "Trusted in this project:"),
+  sites.append(el("p", "note", "Trusted for this project"),
                list(project.map(s => ({...s, label: s.tool})), s => s.site));
   if (other.length) {
     const d = el("details");
-    d.append(el("summary", "", other.length + " rules from your user or managed settings"),
+    d.append(el("summary", "", "User and managed settings (" + other.length + " rules)"),
              list(other.map(s => ({...s, label: s.tool, why: s.source + " settings"})), s => s.site));
     sites.append(d);
   }
   document.getElementById("sites").replaceChildren(sites);
   const sb = a.sandbox, box = el("div");
   if (!sb.enabled) box.append(el("p", "warn-box", (sb.windows ?
-      "Your settings turn the sandbox on, but Claude Code has no sandbox on native Windows (only inside WSL2). " : "") +
-      "Bash commands are not sandboxed: they can read and change anything your user account can, " +
-      "whatever the rules above say."));
+      "Your settings enable the sandbox, but native Windows supports it only through WSL2. " : "") +
+      "The sandbox is off. Bash commands can read and change anything available to your user account, regardless of the rules above."));
   else {
     const d = el("details");  // collapsed by default; the warning above stays open when the sandbox is off
-    d.append(el("summary", "", "Sandbox on: changes only in the project and " + (sb.allowWrite || []).length + " more folders"));
+    d.append(el("summary", "", "Sandbox limits changes to the project and " + (sb.allowWrite || []).length + " additional folders"));
     box.append(d);
-    d.append(el("p", "", "Bash commands run in a sandbox. They can change files only in the project, " +
-                   "temporary folders and these folders:"),
+    d.append(el("p", "", "The sandbox limits Bash changes to the project, temporary folders and the folders below."),
                list((sb.allowWrite || []).map(path => ({kind: "allow", label: "edit", why: "sandbox allowWrite", path})),
                     i => i.path));
-    d.append(el("p", "note", "They can read every file except those the Read deny rules and the sandbox denyRead list block."));
+    d.append(el("p", "note", "Read deny rules and the sandbox denyRead list restrict which files Bash can read."));
   }
   document.getElementById("sandbox").replaceChildren(box);
 }
@@ -651,6 +725,20 @@ document.getElementById("saveStyle").onclick = () => saveStyle(styleText.value);
 document.getElementById("resetStyle").onclick = () => saveStyle(defaultStyle);
 styleText.addEventListener("input", () => { styleMsg.textContent = "Not saved yet"; });
 
+// ---- bottom right: private watch list ----
+const watchText = document.getElementById("watchText"), watchMsg = document.getElementById("watchMsg");
+fetch("/watchlist").then(r => r.json()).then(w => {
+  watchText.value = w.watchlist;
+  document.getElementById("detectors").textContent = "LLM Checker also scans for " + w.detectors.join(", ") + ".";
+});
+document.getElementById("saveWatch").onclick = async () => {
+  const r = await fetch("/watchlist", {method: "POST", body: JSON.stringify({watchlist: watchText.value})});
+  watchText.value = (await r.json()).watchlist;
+  watchMsg.textContent = "Saved";
+  setTimeout(() => { watchMsg.textContent = ""; }, 2000);
+};
+watchText.addEventListener("input", () => { watchMsg.textContent = "Not saved yet"; });
+
 // ---- polling ----
 let historyKey = "";
 async function refresh() {
@@ -658,20 +746,27 @@ async function refresh() {
   const state = await (await fetch("/state")).json();
   const next = state.pending[0] || null;
   const n = state.pending.length;
-  document.getElementById("count").textContent = n ? n + " waiting" : "Nothing waiting";
+  document.getElementById("count").textContent = n;
+  for (const [id, key] of [["statSent", "sent"], ["statBlocked", "blocked"], ["statAuto", "auto"]])
+    document.getElementById(id).textContent = (state.totals || {})[key] ?? 0;
   document.title = (state.paused ? "[OFF] " : "") + (n ? "(" + n + ") LLM Checker" : "LLM Checker");
   power.textContent = state.paused ? "Turn on" : "Turn off";
-  power.classList.toggle("off", state.paused);
+  bashBefore.checked = state.bash_before;
+  const label = document.getElementById("statusLabel");
+  label.textContent = state.paused ? "Monitoring off" : "Monitoring on";
+  label.classList.toggle("off", state.paused);
   document.getElementById("offBanner").hidden = !state.paused;
   star.disabled = !(next && next.site);
-  star.title = next && next.site ? "I trust " + next.site + ": send, and stop asking for it in this project (up arrow)"
-                                 : "Only for websites";
+  star.title = next && next.site ? "Send and trust " + next.site + " for this project (Up Arrow key)"
+                                 : "Trust this website";
   yes.disabled = no.disabled = !next;
+  raw.hidden = !(next && next.cleanable);
+  yes.title = next && next.cleanable ? "Remove findings and send (Right Arrow key)" : "Send (Right Arrow key)";
 
   if ((next && next.id) !== (current && current.id)) {  // re-render only when the top card changes
     current = next;
     deck.replaceChildren();
-    if (!current) deck.append(el("div", "empty", "Nothing waiting. Claude is paused or idle."));
+    if (!current) deck.append(el("div", "empty", "No items are waiting. Claude is paused or idle."));
     else {
       for (let i = 2; i >= 1; i--) {
         const s = el("div", "shadow");
@@ -689,7 +784,7 @@ async function refresh() {
   if (key !== historyKey) {
     historyKey = key;
     document.getElementById("history").replaceChildren(...state.history.map(item => {
-      const kind = item.title.endsWith("(automatic)") ? "auto" : item.approved ? "sent" : "blocked";
+      const kind = item.automatic ? "auto" : item.approved ? "sent" : "blocked";
       const d = el("details", kind);
       d.append(el("summary", "", "#" + item.id + "  " + (item.agent ? "[Subagent: " + item.agent + "] " : "") +
                                  (EVENT[item.event] || item.event) + ": " +

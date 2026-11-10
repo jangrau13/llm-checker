@@ -10,6 +10,7 @@ and opens the page. The tool hooks are HTTP hooks, so they need no shell or curl
 
 import itertools
 import json
+import re
 import shlex
 import threading
 import time
@@ -20,32 +21,141 @@ from pathlib import Path
 import access
 
 PORT = 1308  # also in start.py and hooks/hooks.json
-REJECTED = "[withheld: rejected in the approval page]"
+REJECTED = "[withheld by LLM Checker]"
 
 # How Claude Code should explain a Bash command. Editable on the page; saved in STYLE_FILE.
 # Language rules after the STE80 style of github.com/Dodaios/ste80-humanizer (MIT):
 # Simplified Technical English (ASD-STE100), applied about 80% strictly.
 DEFAULT_STYLE = (
-    "Write for a science student who knows the project's folders and files but not computer "
-    "science terms. Use Simplified Technical English, about 80% strict:\n"
-    "- One idea in each sentence. At most 20 words in a sentence. At most four sentences.\n"
-    "- Active voice and simple tenses. Plain words with one meaning. No phrasal verbs.\n"
-    "- Use one term for one thing. Put a condition first: \"If X, Y\". Put a warning first.\n"
-    "- No jargon such as pipe, stdout, flag, regex, process or shell. If you must name a tool "
-    "such as git, grep or curl, say in a few words what it does.\n"
-    "Give this information, in this order:\n"
-    "1. A warning, if the output that goes to Claude can contain passwords, keys, personal data, "
-    "unpublished results or other internal data.\n"
-    "2. The files and folders that the command reads, by path, and which part of their content goes to Claude.\n"
-    "3. If the command sends data over the internet, the website. If it deletes or overwrites files, which files."
+    "Explain the command to a science student who knows the project but does not know computer science terms. "
+    "Use Simplified Technical English:\n"
+    "- Keep each sentence to one idea and 20 words. Use no more than four sentences.\n"
+    "- Use active voice, simple tenses and plain words. Avoid phrasal verbs.\n"
+    "- Use the same term for the same thing. Put conditions and warnings first.\n"
+    "- Replace jargon such as pipe, stdout, flag, regex, process and shell with plain language. Briefly explain "
+    "named tools such as git, grep and curl.\n"
+    "Cover this information in order:\n"
+    "- Warn about output that may contain passwords, keys, personal data, unpublished results or internal data.\n"
+    "- Name each file and folder the command reads. State which content will go to Claude.\n"
+    "- Name websites that receive data and files that the command deletes or overwrites."
 )
 DATA = Path.home() / ".llm-checker"  # survives plugin updates, which replace the plugin folder
 STYLE_FILE = DATA / "explain-style.txt"
+WATCH_FILE = DATA / "watchlist.txt"  # the user's private terms; never part of any answer to Claude
 
-FAILURE_STOP = ("Stopped in LLM Checker: you blocked the error output of a tool. It is still in the "
-                "conversation and goes to Claude with your next message, unless you rewind to before this step.")
-FAILURE_NOTE = ("Blocking an error stops Claude before it reads it. The error stays in the conversation: "
-                "rewind to before this step, or it goes to Claude with your next message.")
+# Built-in detectors for data that should rarely reach Claude. Tuned to catch, not to be exact:
+# a false alarm costs a click, a miss costs the data.
+DETECTORS = [
+    ("API key or token", r"\b(?:sk|pk|rk)-[A-Za-z0-9_-]{16,}|\bgh[pousr]_[A-Za-z0-9]{30,}|\bxox[abpr]-[A-Za-z0-9-]{10,}"
+                         r"|\bAKIA[0-9A-Z]{16}\b|\bAIza[0-9A-Za-z_-]{35}|\b[a-z]{2,8}_(?:live|test)_[A-Za-z0-9_]{12,}"),
+    ("password or secret in settings", r"(?i)\b(?:api[_-]?key|secret|token|passw(?:or)?d|pwd)\b['\"]?\s*[:=]\s*['\"]?[^\s'\",;&)]{6,}"),
+    ("private key", r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    ("web token (JWT)", r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
+    # Personal data (PII), international. Names are not detectable by pattern: put the names that
+    # matter on the watch list.
+    ("email address", r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
+    ("phone number", r"(?<![\w.])\+\d{1,3}[ .-]?\(?\d{1,4}\)?(?:[ .-]?\d{2,4}){2,4}\b"  # international, +country code
+                     r"|\(\d{3}\)\s?\d{3}[-.]\d{4}\b"                                   # North America (555) 123-4567
+                     r"|(?<![\w.])0\d{1,4}[ /-]\d{2,4}(?:[ -]\d{2,4}){1,3}\b"),         # national trunk 0 formats
+    ("payment card number", r"\b(?:\d[ -]?){12,18}\d\b", "luhn"),
+    ("IBAN", r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,3})?\b"),
+    ("national ID number",
+     r"\b\d{3}-\d{2}-\d{4}\b"                                     # US social security number
+     r"|\b[A-CEGHJ-PR-TW-Z]{2} ?\d{2} ?\d{2} ?\d{2} ?[A-D]\b"     # UK national insurance number
+     r"|\b756\.\d{4}\.\d{4}\.\d{2}\b"                             # Swiss AHV number
+     r"|\b[12] ?\d{2} ?\d{2} ?\d{2} ?\d{3} ?\d{3} ?\d{2}\b"       # French social security number (NIR)
+     r"|\b[A-Z]{6}\d{2}[A-EHLMPRST]\d{2}[A-Z]\d{3}[A-Z]\b"        # Italian codice fiscale
+     r"|\b[XYZ]?\d{7,8}-?[A-HJ-NP-TV-Z]\b"                        # Spanish DNI / NIE
+     r"|\b\d{6}[-+]\d{4}\b"                                       # Swedish / Danish / Finnish personal number
+     r"|\b\d{4} \d{4} \d{4}\b"                                    # Indian Aadhaar
+     r"|\b\d{3}\.\d{3}\.\d{3}-\d{2}\b"),                          # Brazilian CPF
+    ("IP address", r"\b(?:\d{1,3}\.){3}\d{1,3}\b|\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b"),
+    ("coordinates", r"-?\d{1,2}\.\d{4,}\s*,\s*-?\d{1,3}\.\d{4,}"),
+]
+# ponytail: patterns only; a proper PII engine (for example Microsoft Presidio) would also find names,
+# postal addresses and dates of birth, at the cost of a large dependency.
+
+
+def luhn(text):
+    """The checksum every payment card number passes; filters out long numbers in data tables."""
+    digits = [int(c) for c in text if c.isdigit()][::-1]
+    return sum(d if i % 2 == 0 else (d * 2 - 9 if d > 4 else d * 2) for i, d in enumerate(digits)) % 10 == 0
+
+
+CHECKS = {"luhn": luhn}
+
+
+def watchlist_text():
+    return WATCH_FILE.read_text(encoding="utf-8") if WATCH_FILE.exists() else ""
+
+
+class Pattern:
+    """A regex plus an optional check that a match must pass (for example the card checksum)."""
+
+    def __init__(self, rx, check=None):
+        self.rx, self.check = re.compile(rx) if isinstance(rx, str) else rx, check
+
+    def finditer(self, text):
+        return (m for m in self.rx.finditer(text) if not self.check or self.check(m.group(0)))
+
+    def sub(self, repl, text):
+        return self.rx.sub(lambda m: repl if not self.check or self.check(m.group(0)) else m.group(0), text)
+
+
+def patterns():
+    """(label, pattern) for the detectors and the watch list. Lines starting with re: are regexes."""
+    out = [(d[0], Pattern(d[1], CHECKS.get(d[2]) if len(d) > 2 else None)) for d in DETECTORS]
+    for line in watchlist_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            rx = re.compile(line[3:].strip()) if line.startswith("re:") else re.compile(re.escape(line), re.I)
+        except re.error:
+            continue  # a broken regex on the list must not stop the checker
+        out.append(("watch list", Pattern(rx)))
+    return out
+
+
+def strings(value, key=None):
+    """Every string inside a tool result, except type tags and file data such as images."""
+    if isinstance(value, dict):
+        for k, v in value.items():
+            yield from strings(v, k)
+    elif isinstance(value, list):
+        for v in value:
+            yield from strings(v)
+    elif isinstance(value, str) and key not in ("type", "base64", "data"):
+        yield value
+
+
+def findings(value):
+    """What the detectors and the watch list find, with counts, for the card."""
+    found = {}
+    for label, rx in patterns():
+        for text in strings(value):
+            for m in rx.finditer(text):
+                entry = found.setdefault((label, m.group(0)), {"label": label, "match": m.group(0), "count": 0})
+                entry["count"] += 1
+    return list(found.values())
+
+
+def scrub(value, key=None):
+    """The same tool result with every finding replaced, keeping the shape Claude Code expects."""
+    if isinstance(value, dict):
+        return {k: scrub(v, k) for k, v in value.items()}
+    if isinstance(value, list):
+        return [scrub(v) for v in value]
+    if isinstance(value, str) and key not in ("type", "base64", "data"):
+        for label, rx in patterns():
+            value = rx.sub(f"[removed: {label}]", value)
+    return value
+
+
+PRIVATE = (".llm-checker",)  # tool calls that mention the checker's own data folder are refused
+
+FAILURE_STOP = "You blocked a tool error. Rewind past this step before sending another message."
+FAILURE_NOTE = "Claude has not read this error. Block it, then rewind past this step before sending another message."
 
 
 def style():
@@ -65,16 +175,15 @@ def summary_request(scripts=(), root=None):
     """Sent to Claude Code as the reason for holding back a Bash call it has not explained yet."""
     root = root or access.project_root()
     read_first = ("This command runs these script files: " + ", ".join(scripts) + ". Read each of them "
-                  "first, so your explanation covers what they do. ") if scripts else ""
+                  "before explaining the command. ") if scripts else ""
     blocked = protected(root)
-    boundary = (f"\n\nThe project folder is {root}. The user does not want files outside it read, nor these "
-                "files and folders (patterns from the settings' Read rules, relative to the project folder "
-                "unless they start with ~/ or //): " + (", ".join(blocked) or "none") + ". If the command, or a "
-                "script it runs, reads any of them, start the explanation with a clear warning that names them.")
-    return ("Not run yet: the user wants an explanation first. " + read_first + "Then call Bash again for "
-            "this step with the explanation in `description`. Write it exactly as the user's instructions "
-            "below say: they replace the usual short description and take precedence over any other "
-            "guidance on how to describe a command." + boundary + "\n\nThe user's instructions:\n" + style())
+    boundary = (f"\n\nThe project folder is {root}. Do not read outside this folder. The Read rules also protect "
+                "these paths: " + (", ".join(blocked) or "none") + ". Relative paths start at the project folder; "
+                "paths beginning with ~/ or // use their stated location. Begin with a warning if the command or "
+                "one of its scripts reads a protected path.")
+    return ("Explain this command before running it. " + read_first + "Call Bash again with the explanation in "
+            "`description`. Follow the instructions below in place of the usual description guidance." + boundary +
+            "\n\nExplanation instructions:\n" + style())
 
 
 SCRIPT_EXT = (".py", ".sh", ".bash", ".zsh", ".r", ".js", ".mjs", ".ts", ".pl", ".rb", ".ps1", ".jl")
@@ -109,6 +218,9 @@ PASS_THROUGH = {("UserPromptSubmit", None)} | {("PreToolUse", t) for t in ("Read
     ("PostToolUse", t) for t in ("Edit", "Write", "ToolSearch")}
 
 paused = [False]  # "Turn off" on the page; back on after a server restart, the safe default
+# "Check commands before they run" on the page. Off by default: Bash commands run without a card or an
+# explanation, and only what they send back to Claude waits on the page.
+bash_before = [False]
 inflight = {}  # (event, tool_use_id) -> answer slot; ponytail: never pruned, a few KB per session
 last_poll = [0.0]  # when a page last asked for /state
 last_open = [0.0]
@@ -137,16 +249,16 @@ def view(hook, request=None):
     """The part of the hook input the page shows."""
     event = hook.get("hook_event_name")
     if request:
-        return "Asked Claude Code to explain this Bash command first (automatic)", {
-            "command": hook["tool_input"].get("command"), "sent to Claude": request}
+        return "Requested a command explanation", {
+            "command": hook["tool_input"].get("command"), "request sent to Claude": request}
     if event == "UserPromptSubmit":
-        return "Your prompt -> Claude", hook.get("prompt")
+        return "Prompt sent to Claude", hook.get("prompt")
     if event == "PreToolUse":
-        return f"Claude asks to run {hook.get('tool_name')}", hook.get("tool_input")
+        return f"Claude requested {hook.get('tool_name')}", hook.get("tool_input")
     if event == "PostToolUse":
-        return f"Result of {hook.get('tool_name')} -> Claude", hook.get("tool_response")
+        return f"{hook.get('tool_name')} result waiting to be sent", hook.get("tool_response")
     if event == "PostToolUseFailure":
-        return f"Error of {hook.get('tool_name')} -> Claude", {"error": hook.get("error")}
+        return f"{hook.get('tool_name')} error waiting to be sent", {"error": hook.get("error")}
     return event, hook
 
 
@@ -161,16 +273,20 @@ def redact(value, key=None):
     return value
 
 
-def answer(hook, approve, request=None):
+def answer(hook, approve, request=None, clean=False):
     """Hook JSON output. Approve = empty output, so the normal permission flow still applies.
-    request: the explanation request that holds back an unexplained Bash call."""
+    request: the explanation request that holds back an unexplained Bash call.
+    clean: send the tool result with the detector and watch list findings removed."""
+    event = hook.get("hook_event_name")
+    if approve and clean and event == "PostToolUse":
+        return {"hookSpecificOutput": {"hookEventName": "PostToolUse",
+                                       "updatedToolOutput": scrub(hook.get("tool_response"))}}
     if approve and not request:
         return {}
-    event = hook.get("hook_event_name")
     if event == "UserPromptSubmit":
-        return {"decision": "block", "reason": "Rejected in the approval page."}
+        return {"decision": "block", "reason": "The user blocked this item in LLM Checker."}
     if event == "PreToolUse":
-        reason = request or "The user rejected this tool call in the approval page."
+        reason = request or "The user blocked this tool call in LLM Checker."
         return {"hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
@@ -186,12 +302,17 @@ def answer(hook, approve, request=None):
     if event == "PostToolUseFailure":
         # Claude Code offers no way to replace error text, so blocking stops Claude before its next request.
         return {"continue": False, "stopReason": FAILURE_STOP}
-    return {"decision": "block", "reason": "Rejected in the approval page."}
+    return {"decision": "block", "reason": "The user blocked this item in LLM Checker."}
 
 
 def handle_hook(hook):
     """The hook answer for a single call; waits on the page when the call needs a decision."""
     event, tool = hook.get("hook_event_name"), hook.get("tool_name") or ""
+    # The checker's own folder holds the watch list: Claude must never read it, whatever the tool.
+    # ponytail: plain text match; a command that builds the path (for example with wildcards) gets past it
+    if event == "PreToolUse" and any(p in s for s in strings(hook.get("tool_input")) for p in PRIVATE):
+        return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                       "permissionDecisionReason": "This request would expose private LLM Checker data."}}
     # MCP calls: only what comes back and goes to Claude waits, not the call itself.
     if (event, tool or None) in PASS_THROUGH or (event == "PreToolUse" and tool.startswith("mcp__")):
         return {}
@@ -200,14 +321,17 @@ def handle_hook(hook):
     if paused[0]:  # turned off on the page: logged, everything passes
         with lock:
             history.insert(0, {"id": next(ids), "event": event, "tool": tool, "content": view(hook)[1],
-                               "title": f"{view(hook)[0]} (checker off, automatic)", "approved": True})
+                               "title": f"{view(hook)[0]} (checker off)", "approved": True,
+                               "automatic": True})
         return {}
+    if event == "PreToolUse" and tool == "Bash" and not bash_before[0]:
+        return {}  # the command runs; its output still waits on the page before it goes to Claude
     url = (hook.get("tool_input") or {}).get("url")
     if tool == "WebFetch" and access.trusted(root, url):
         with lock:  # a site trusted for this project: logged, no click needed
             history.insert(0, {"id": next(ids), "event": event, "tool": "WebFetch",
-                               "title": f"{access.host(url)} is trusted in this project (automatic)",
-                               "content": hook.get("tool_input"), "approved": True})
+                               "title": f"Sent automatically because {access.host(url)} is trusted for this project",
+                               "content": hook.get("tool_input"), "approved": True, "automatic": True})
         return {}
     bash = event == "PreToolUse" and tool == "Bash"
     # Keyed by session, not by command: Claude often adjusts the command when it retries.
@@ -223,11 +347,11 @@ def handle_hook(hook):
     item = {"id": next(ids), "event": event, "title": title, "content": content,
             "session": hook.get("session_id"), "tool": tool, "input": hook.get("tool_input")}
     if hook.get("agent_id"):  # the step comes from a subagent, not from the main conversation
-        item["agent"] = hook.get("agent_type") or "subagent"
+        item["agent"] = hook.get("agent_type") or "Subagent"
     if ask_summary:  # automatic: logged in the history, no click needed
         with lock:
             explained.add(key)
-            history.insert(0, {**item, "approved": True})
+            history.insert(0, {**item, "approved": True, "automatic": True})
         return answer(hook, True, request)
     if bash:
         item["summary"] = hook["tool_input"].get("description")
@@ -235,14 +359,17 @@ def handle_hook(hook):
         item["scripts"] = [{"path": p, "content": read_script(p)} for p in scripts]
     if event == "PostToolUseFailure":
         item["note"] = FAILURE_NOTE
+    if event in ("PostToolUse", "PostToolUseFailure"):
+        item["findings"] = findings(content)  # what is about to reach Claude, checked locally
+        item["cleanable"] = event == "PostToolUse" and bool(item["findings"])
     if tool == "WebFetch" and access.host(url):
         item["site"] = access.host(url)
-    entry = {"item": item, "event": threading.Event(), "approve": False, "root": root}
+    entry = {"item": item, "event": threading.Event(), "approve": False, "clean": False, "root": root}
     with lock:
         pending[item["id"]] = entry
     ensure_page_open()
     entry["event"].wait()  # blocks the hook, and with it Claude, until a decision
-    return answer(hook, entry["approve"])
+    return answer(hook, entry["approve"], clean=entry["clean"])
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -269,12 +396,17 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/state":
             last_poll[0] = time.time()
             with lock:
+                auto = sum(1 for h in history if h.get("automatic"))
+                sent = sum(1 for h in history if h.get("approved")) - auto
                 self.send(200, {"pending": [p["item"] for p in pending.values()], "history": history[:50],
-                                "paused": paused[0]})
+                                "paused": paused[0], "bash_before": bash_before[0],
+                                "totals": {"sent": sent, "blocked": len(history) - sent - auto, "auto": auto}})
         elif self.path == "/access":
             self.send(200, access.access(last_root[0]))
         elif self.path == "/style":
             self.send(200, {"style": style(), "default": DEFAULT_STYLE})
+        elif self.path == "/watchlist":
+            self.send(200, {"watchlist": watchlist_text(), "detectors": [label for label, _ in DETECTORS]})
         elif self.path == "/":
             self.send(200, PAGE.read_text(encoding="utf-8"), "text/html; charset=utf-8")
         else:
@@ -306,13 +438,24 @@ class Handler(BaseHTTPRequestHandler):
                 entry = pending.pop(body.get("id"), None)
                 if entry and body.get("trust") and entry["item"].get("site"):
                     access.trust(entry["root"], entry["item"]["site"])  # super like: saved for this project
-                    entry["item"]["title"] += " (site now trusted)"
+                    entry["item"]["title"] += "; site trusted for this project"
                 if entry:
                     entry["approve"] = bool(body.get("approve"))
+                    entry["clean"] = bool(body.get("clean")) and entry["item"].get("cleanable", False)
+                    if entry["clean"]:
+                        entry["item"]["title"] += "; findings removed before sending"
                     entry["item"]["approved"] = entry["approve"]
                     history.insert(0, entry["item"])
                     entry["event"].set()
             self.send(200 if entry else 404, {})
+        elif self.path == "/watchlist":
+            text = str(self.read_json().get("watchlist", ""))
+            WATCH_FILE.parent.mkdir(parents=True, exist_ok=True)
+            WATCH_FILE.write_text(text, encoding="utf-8")
+            self.send(200, {"watchlist": watchlist_text()})
+        elif self.path == "/bash-before":
+            bash_before[0] = bool(self.read_json().get("on"))
+            self.send(200, {"bash_before": bash_before[0]})
         elif self.path == "/pause":
             paused[0] = bool(self.read_json().get("paused"))  # cards already waiting keep waiting
             self.send(200, {"paused": paused[0]})
@@ -331,5 +474,5 @@ class Handler(BaseHTTPRequestHandler):
 PAGE = Path(__file__).with_name("page.html")  # read on every request, so page edits need no restart
 
 if __name__ == "__main__":
-    print(f"Approval page: http://127.0.0.1:{PORT}")
+    print(f"LLM Checker: http://127.0.0.1:{PORT}")
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

@@ -40,6 +40,10 @@ ls = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "s", "
 ls_explained = {**ls, "tool_input": {"command": "ls", "description": "Lists the files in this folder."}}
 reason = lambda out: out["hookSpecificOutput"]["permissionDecisionReason"]
 
+# By default commands run without a card or an explanation; only their output waits.
+assert post("/hook", ls) == {}
+assert post("/bash-before", {"on": True})["bash_before"]  # "Cautiousness high", for the tests below
+
 # Pre-step: the first call goes straight back to Claude Code with the request to explain it.
 assert reason(post("/hook", ls)) == server.summary_request()
 # The retry waits on the page with the explanation, even when Claude changed the command;
@@ -72,6 +76,7 @@ post("/pause", {"paused": True})
 assert post("/hook", ls_explained) == {}
 state = json.loads(urllib.request.urlopen(base + "/state").read())
 assert state["paused"] and not state["pending"] and "checker off" in state["history"][0]["title"]
+assert sum(state["totals"].values()) == len(server.history) and state["totals"]["auto"] >= 1, state["totals"]
 post("/pause", {"paused": False})
 
 # A subagent's step carries its type, and its Bash calls are explained separately from the main conversation.
@@ -161,4 +166,42 @@ item, out = hook_then_decide(failure, False)
 assert item["content"] == {"error": "Exit code 1\nAPI_KEY=abc"} and item["note"] == server.FAILURE_NOTE
 assert out == {"continue": False, "stopReason": server.FAILURE_STOP}
 assert hook_then_decide(failure, True)[1] == {}
+
+# Detectors and the private watch list: findings on the card, and "send" removes them before Claude sees them.
+server.WATCH_FILE = TMP / "watchlist.txt"
+post("/watchlist", {"watchlist": "Anna Huber\nre:K_COLD\\s*=\\s*[\\d.]+\n# a comment\nre:([broken\n"})
+leaky = {"stdout": "api_key = lc_live_FAKE_7Qx2mR9vK3pL8nW4tZ6y\nowner Anna Huber, anna@example.org\nK_COLD = 0.4183\n",
+         "stderr": "", "interrupted": False, "isImage": False}
+result = {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {"command": "cat lab.ini"},
+          "tool_response": leaky}
+t = threading.Thread(target=lambda: outs.append(post("/hook", result)))
+outs = []
+t.start()
+time.sleep(0.2)
+item = json.loads(urllib.request.urlopen(base + "/state").read())["pending"][0]
+labels = {f["label"] for f in item["findings"]}
+assert {"API key or token", "password or secret in settings", "email address", "watch list"} <= labels, labels
+assert item["cleanable"]
+post("/decide", {"id": item["id"], "approve": True, "clean": True})
+t.join(2)
+sent = outs[0]["hookSpecificOutput"]["updatedToolOutput"]
+assert "lc_live" not in sent["stdout"] and "Anna Huber" not in sent["stdout"] and "0.4183" not in sent["stdout"], sent
+assert "@example.org" not in sent["stdout"] and sent["interrupted"] is False, sent
+assert not server.findings({"stdout": "rate 0.412/h at 4 C, 9 samples"}), "plain science output raises no alarm"
+
+# International personal data; a long number in a data table is not a card number unless its checksum fits.
+kinds = lambda text: {f["label"] for f in server.findings({"stdout": text})}
+assert "payment card number" in kinds("card 4111 1111 1111 1111")
+assert "payment card number" not in kinds("reads 4111 1111 1111 1112")
+assert "national ID number" in kinds("SSN 123-45-6789")
+assert "national ID number" in kinds("NI number AB 12 34 56 C")  # QQ... is the official sample, never issued
+assert "national ID number" in kinds("codice fiscale RSSMRA85T10A562S")
+assert "phone number" in kinds("call (555) 123-4567 or +49 30 1234 5678")
+assert "IBAN" in kinds("DE89 3704 0044 0532 0130 00")
+
+# Claude never gets to read the checker's own folder, whichever tool it uses.
+for call in ({"tool_name": "Read", "tool_input": {"file_path": "/Users/x/.llm-checker/watchlist.txt"}},
+             {"tool_name": "Bash", "tool_input": {"command": "cat ~/.llm-checker/watchlist.txt"}}):
+    out = post("/hook", {"hook_event_name": "PreToolUse", **call})
+    assert out["hookSpecificOutput"]["permissionDecision"] == "deny", out
 print("ok")

@@ -110,13 +110,13 @@ def decide(path, tools, rs, workdirs, mode):
         for r in rs:
             if r["kind"] == kind and r["tool"] in tools and (
                     not r["arg"] or any(r["rx"].match(p) for p in chain)):
-                return kind, f'{r["text"]} ({r["source"]} settings)'
+                return kind, f'{r["text"]} in {r["source"]} settings'
     inside = any(path == w or w in path.parents for w in workdirs)
     if mode == "bypassPermissions" or (tools is READ_TOOLS and inside):
-        return "allow", "default: inside the project" if inside else "default: bypassPermissions mode"
+        return "allow", "Allowed inside the project" if inside else "Allowed by bypassPermissions mode"
     if inside and mode == "acceptEdits":
-        return "allow", "default: acceptEdits mode"
-    return "ask", "default: Claude Code asks first"
+        return "allow", "Allowed by acceptEdits mode"
+    return "ask", "Claude Code asks first"
 
 
 def access(root, limit=3000):
@@ -166,7 +166,7 @@ def access(root, limit=3000):
     outside += [{"path": str(d), "rule": "additionalDirectories", "kind": "allow", "source": "settings",
                  "action": "read"} for d in extra]
 
-    sites = [{"site": (r["arg"] or "any site").removeprefix("domain:"), "kind": r["kind"], "source": r["source"],
+    sites = [{"site": (r["arg"] or "all websites").removeprefix("domain:"), "kind": r["kind"], "source": r["source"],
               "tool": r["tool"]} for r in rs if r["tool"] in ("WebFetch", "WebSearch")]
 
     sandbox = {}
