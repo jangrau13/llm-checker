@@ -13,6 +13,7 @@ import json
 import re
 import secrets
 import shlex
+import tempfile
 import threading
 import time
 import webbrowser
@@ -158,6 +159,8 @@ def scrub(value, key=None):
 
 PRIVATE = (".llm-checker",)  # tool calls that mention the checker's own data folder are refused
 
+PRIVATE += (".lc-output",)  # the buffer files of running Bash commands, see BASH_PREFIX
+
 FAILURE_STOP = "You blocked a tool error. Claude still has its text: rewind past this step before sending another message."
 FAILURE_NOTE = ("Claude Code cannot hold back or clean an error: Claude receives this text whatever you choose. "
                 "Block tells Claude to ignore it and stop. Rewind past this step to remove it.")
@@ -182,17 +185,34 @@ def protected(root):
 # Bash: all output goes to a buffer file and is printed when the shell ends, with the exit code if it failed.
 # exit, syntax errors and failing commands therefore end as a normal result; a killed command (timeout)
 # prints nothing, so its error carries no output. Without a buffer file the command does not run.
-# ponytail: a KILL leaves the buffer file behind in the folder; a command that sets its own EXIT trap
-# replaces this trap, so its output is never printed
-BASH_PREFIX = r'''__lcf=$(mktemp 2>/dev/null || mktemp "$PWD/.lc-output.XXXXXX") || { echo "LLM Checker: no buffer file could be created, so the command did not run."; exit 0; }
+# The file sits in the command's folder (the sandbox allows writing there), else in the temp folder.
+# ponytail: a command that sets its own EXIT trap replaces this trap, so its output is never printed
+BASH_PREFIX = r'''__lcf="$PWD/NAME"; { : > "$__lcf"; } 2>/dev/null || __lcf="${TMPDIR:-/tmp}/NAME"; { : > "$__lcf"; } 2>/dev/null || { echo "LLM Checker: no buffer file could be created, so the command did not run."; exit 0; }
 trap '__lc=$?; exec 1>&8 2>&9; cat "$__lcf"; rm -f "$__lcf"; [ "$__lc" -eq 0 ] || echo "Exit code $__lc"; exit 0' EXIT
 trap 'trap - EXIT; rm -f "$__lcf"; exit 143' TERM INT HUP
 exec 8>&1 9>&2 >"$__lcf" 2>&1
 '''
+buffers = {}  # tool_use_id -> (folder, file name) of a running Bash command's buffer file
+
+
+def bash_prefix(hook):
+    """BASH_PREFIX with a buffer file name for this call, remembered so the file can be removed afterwards."""
+    name = ".lc-output." + secrets.token_hex(8)
+    if hook.get("tool_use_id"):
+        buffers[hook["tool_use_id"]] = (hook.get("cwd") or ".", name)
+    return BASH_PREFIX.replace("NAME", name)
+
+
+def remove_buffer(hook):
+    """Delete the buffer file of a finished Bash call: normally gone already, left behind only by a KILL."""
+    folder, name = buffers.pop(hook.get("tool_use_id"), (None, None))
+    for f in ([Path(folder) / name, Path(tempfile.gettempdir()) / name] if name else []):
+        # ponytail: a sandbox with its own TMPDIR is not covered; there the command's folder is used first
+        f.unlink(missing_ok=True)
 # PowerShell: $? is false after a failed cmdlet or a native program with a nonzero exit code.
 # ponytail: untested; a command calling exit or stopping on a terminating error still fails as an error
 PS_SUFFIX = '\n$__lc = $?; if (-not $__lc) { "Exit code $(if ($LASTEXITCODE) { $LASTEXITCODE } else { 1 })" }'
-SHELLS = {"Bash": lambda c: BASH_PREFIX + c, "PowerShell": lambda c: c + PS_SUFFIX}
+SHELLS = {"Bash": lambda c, hook: bash_prefix(hook) + c, "PowerShell": lambda c, hook: c + PS_SUFFIX}
 
 
 def shell_runs(hook):
@@ -202,7 +222,8 @@ def shell_runs(hook):
     change = SHELLS.get(hook.get("tool_name"))
     if not change or i.get("run_in_background") or not str(i.get("command") or "").strip():
         return {}  # background output goes to a file, not into this result
-    return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": {**i, "command": change(i["command"])}}}
+    return {"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                   "updatedInput": {**i, "command": change(i["command"], hook)}}}
 
 
 def summary_request(scripts=(), root=None):
@@ -346,6 +367,8 @@ def answer(hook, approve, request=None, clean=False):
 def handle_hook(hook):
     """The hook answer for a single call; waits on the page when the call needs a decision."""
     event, tool = hook.get("hook_event_name"), hook.get("tool_name") or ""
+    if event in ("PostToolUse", "PostToolUseFailure"):
+        remove_buffer(hook)  # the command has ended: its buffer file goes before anything else happens
     # The checker's own folder holds the watch list: Claude must never read it, whatever the tool.
     # ponytail: plain text match; a command that builds the path (for example with wildcards) gets past it
     if event == "PreToolUse" and any(p in s for s in strings(hook.get("tool_input")) for p in PRIVATE):

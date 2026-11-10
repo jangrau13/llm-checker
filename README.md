@@ -46,7 +46,7 @@ The Claude Code terminal app also accepts `/plugin marketplace add jangrau13/llm
 
 - The page sees data exposed through hooks. System prompts, CLAUDE.md files, pasted images, `@file` mentions, editor selections and compacted context bypass the page.
 - Blocking a tool result replaces its text after the tool has run.
-- Claude Code does not allow plugins to replace or hold back tool errors, so LLM Checker changes each Bash command to never fail. The command's output is kept in a temporary file and printed when the command ends, followed by its exit code if it failed; it can then be cleaned or blocked like any result. A command stopped by a timeout prints nothing. Bash output therefore appears only when the command ends, and stdout and stderr arrive together.
+- Claude Code does not allow plugins to replace or hold back tool errors, so LLM Checker changes each Bash command to never fail. The command's output is kept in a temporary file and printed when the command ends, followed by its exit code if it failed; it can then be cleaned or blocked like any result. A command stopped by a timeout prints nothing. The temporary file is deleted at the latest when the command's result arrives, and tool calls that name it are refused. Bash output therefore appears only when the command ends, and stdout and stderr arrive together.
 - PowerShell commands get a line that prints the exit code of a failed command. A PowerShell command that calls `exit`, and errors from other tools, still reach Claude whatever you choose. Block such an error to tell Claude to ignore it and stop, then rewind past that step before sending another message.
 
 Your explanation instructions and the server log are stored in `~/.llm-checker/`.

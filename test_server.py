@@ -42,24 +42,28 @@ reason = lambda out: out["hookSpecificOutput"]["permissionDecisionReason"]
 
 # By default commands run without a card or an explanation; only their output waits.
 # Every command that runs is changed to never fail, so a failure arrives as a cleanable result.
-wrapped = lambda cmd: {"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                              "updatedInput": {"command": server.BASH_PREFIX + cmd}}}
-assert post("/hook", ls) == wrapped("ls")
+sent = post("/hook", ls)["hookSpecificOutput"]["updatedInput"]["command"]
+assert sent.startswith('__lcf="$PWD/.lc-output.') and sent.endswith("\nls"), sent
 assert post("/hook", {**ls, "tool_input": {"command": "sleep 9", "run_in_background": True}}) == {}
 import subprocess
 
 for cmd, shown in (("echo ok", "ok\n"), ("echo secret >&2; exit 3", "secret\nExit code 3\n"),
                    ("echo secret; if then", "Exit code 2\n"), ("ls /no-such-folder", "Exit code 1\n")):
     # Claude Code runs a command roughly like this: eval, then record the folder
-    r = subprocess.run(["bash", "-c", 'eval "$1" && pwd -P >| /dev/null', "_", server.BASH_PREFIX + cmd],
+    r = subprocess.run(["bash", "-c", 'eval "$1" && pwd -P >| /dev/null', "_", server.bash_prefix({}) + cmd],
                        capture_output=True, text=True, cwd=TMP)
     assert r.returncode == 0 and r.stdout.endswith(shown) and not r.stderr, (cmd, r)
 # A killed command (a timeout) prints nothing, so its error carries none of the output.
-p = subprocess.Popen(["bash", "-c", server.BASH_PREFIX + "echo secret; sleep 5"], stdout=subprocess.PIPE, cwd=TMP)
+p = subprocess.Popen(["bash", "-c", server.bash_prefix({}) + "echo secret; sleep 5"], stdout=subprocess.PIPE, cwd=TMP)
 time.sleep(0.5)
 p.terminate()
 assert p.communicate()[0] == b"" and p.returncode == 143
 assert not list(TMP.glob(".lc-output.*")), "buffer files are removed"
+# A file left behind by a KILL is removed as soon as the call's result or error arrives.
+name = server.bash_prefix({"tool_use_id": "toolu_kill", "cwd": str(TMP)}).split("/")[1].split('"')[0]
+(TMP / name).write_text("secret")
+server.remove_buffer({"tool_use_id": "toolu_kill"})
+assert not (TMP / name).exists() and "toolu_kill" not in server.buffers
 assert post("/bash-before", {"on": True})["bash_before"]  # "Cautiousness high", for the tests below
 
 # Pre-step: the first call goes straight back to Claude Code with the request to explain it.
@@ -69,7 +73,7 @@ assert reason(post("/hook", ls)) == server.summary_request()
 changed = {**ls, "tool_input": {"command": "ls -la", "description": "Lists the files in this folder."}}
 item, out = hook_then_decide(changed, True)
 assert item["summary"] == "Lists the files in this folder." and item["content"]["command"] == "ls -la"
-assert out["hookSpecificOutput"]["updatedInput"]["command"] == server.BASH_PREFIX + "ls -la", out
+assert out["hookSpecificOutput"]["updatedInput"]["command"].endswith("\nls -la"), out
 assert opened, "a waiting card opens the page when none is open"
 
 # A command that runs a script: Claude Code is asked to read and explain the script too,
@@ -246,6 +250,9 @@ for call in ({"tool_name": "Read", "tool_input": {"file_path": "/Users/x/.llm-ch
              {"tool_name": "Bash", "tool_input": {"command": "cat ~/.llm-checker/watchlist.txt"}}):
     out = post("/hook", {"hook_event_name": "PreToolUse", **call})
     assert out["hookSpecificOutput"]["permissionDecision"] == "deny", out
+# Nor the buffer file of a running command.
+out = post("/hook", {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "cat .lc-output.*"}})
+assert out["hookSpecificOutput"]["permissionDecision"] == "deny", out
 
 # A newer version replaces this server: it reports its version, and stops only for the right token.
 import urllib.error
